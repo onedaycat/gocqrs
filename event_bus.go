@@ -1,6 +1,5 @@
 package gocqrs
 
 type EventBus interface {
-	Publish()
-	Subscribe()
+	Publish(events []*EventMessage) error
 }
