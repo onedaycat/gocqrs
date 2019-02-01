@@ -17,6 +17,7 @@ var getByTimeOpts = options.Find().SetSort(bson.D{{xid, 1}})
 var upsertOpts = options.Replace().SetUpsert(true)
 var xid = "_id"
 var emptyStr = ""
+var errDupCode = 11000
 
 type MongoEventStore struct {
 	client   *mongo.Client
@@ -59,6 +60,15 @@ func (m *MongoEventStore) CreateSchema() error {
 	}
 
 	if _, err := m.event.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Options: options.Index().
+				SetName("aggUnique").
+				SetUnique(true),
+			Keys: bsonx.Doc{
+				{"a", bsonx.Int32(1)},
+				{"v", bsonx.Int32(1)},
+			},
+		},
 		{
 			Options: options.Index().
 				SetName("aggAsc").
@@ -106,19 +116,15 @@ func (m *MongoEventStore) CreateSchema() error {
 	return err
 }
 
-func (m *MongoEventStore) Get(id string, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, string, error) {
-	return nil, "", nil
-}
-
-func (m *MongoEventStore) GetByTime(eventTypes gocqrs.EventType, limit int, nextToken string) ([]*gocqrs.EventMessage, error) {
+func (m *MongoEventStore) Get(id string, time int64) ([]*gocqrs.EventMessage, error) {
 	return nil, nil
 }
 
-func (m *MongoEventStore) GetByEventType(eventTypes gocqrs.EventType, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, error) {
+func (m *MongoEventStore) GetByEventType(eventType gocqrs.EventType, time int64) ([]*gocqrs.EventMessage, error) {
 	return nil, nil
 }
 
-func (m *MongoEventStore) GetByAggregateType(aggTypes gocqrs.AggregateType, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, error) {
+func (m *MongoEventStore) GetByAggregateType(aggType gocqrs.AggregateType, time int64) ([]*gocqrs.EventMessage, error) {
 	return nil, nil
 }
 
@@ -162,6 +168,15 @@ func (m *MongoEventStore) Save(ctx context.Context, payloads []*gocqrs.EventMess
 
 	_, err := m.event.InsertMany(ctx, docs)
 	if err != nil {
+		aerr, ok := err.(mongo.BulkWriteException)
+		if ok {
+			for _, wrs := range aerr.WriteErrors {
+				if wrs.Code == errDupCode {
+					return gocqrs.ErrVersionInconsistency
+				}
+			}
+		}
+
 		return err
 	}
 

@@ -8,7 +8,9 @@ import (
 
 type EventStore interface {
 	Get(id string, agg AggregateRoot) error
-	GetByTime(id string, time int64, agg AggregateRoot) error
+	GetByTime(id string, time int64, agg AggregateRoot) ([]*EventMessage, error)
+	GetByEventType(eventType EventType, time int64) ([]*EventMessage, error)
+	GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error)
 	GetSnapshot(id string, agg AggregateRoot) error
 	Save(agg AggregateRoot) error
 }
@@ -23,25 +25,30 @@ func NewEventStore(storage Storage, eventBus EventBus) EventStore {
 }
 
 func (es *eventStore) Get(id string, agg AggregateRoot) error {
-	// payloads, err := es.storage.Get(id)
-	// if err != nil {
-	// 	return err
-	// }
+	events, err := es.storage.Get(id, 0)
+	if err != nil {
+		return err
+	}
 
-	// es.applyEvent(payloads, agg)
+	for _, event := range events {
+		if err = agg.Apply(event); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (es *eventStore) GetByTime(id string, time int64, agg AggregateRoot) error {
-	// payloads, err := es.storage.GetByTime(id, time)
-	// if err != nil {
-	// 	return err
-	// }
+func (es *eventStore) GetByTime(id string, time int64, agg AggregateRoot) ([]*EventMessage, error) {
+	return es.storage.Get(id, time)
+}
 
-	// es.applyEvent(payloads, agg)
+func (es *eventStore) GetByEventType(eventType EventType, time int64) ([]*EventMessage, error) {
+	return es.storage.GetByEventType(eventType, time)
+}
 
-	return nil
+func (es *eventStore) GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error) {
+	return es.storage.GetByAggregateType(aggType, time)
 }
 
 func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
@@ -98,19 +105,19 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	}
 
 	return es.storage.BeginTx(func(ctx context.Context) error {
-		curSnap, err := es.storage.GetSnapshot(snapshot.ID)
-		if err != nil && err != ErrNotFound {
-			return err
-		}
+		// curSnap, err := es.storage.GetSnapshot(snapshot.ID)
+		// if err != nil && err != ErrNotFound {
+		// 	return err
+		// }
 
-		fmt.Println("wait 5s")
-		time.Sleep(time.Second * 5)
+		// fmt.Println("wait 5s")
+		// time.Sleep(time.Second * 5)
 
-		if err != ErrNotFound {
-			if curSnap.Version+1 != payloads[0].Version {
-				return ErrVersionInconsistency
-			}
-		}
+		// if err != ErrNotFound {
+		// 	if curSnap.Version+1 != payloads[0].Version {
+		// 		return ErrVersionInconsistency
+		// 	}
+		// }
 
 		if err := es.storage.Save(ctx, payloads, snapshot); err != nil {
 			return err
