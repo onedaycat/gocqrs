@@ -2,6 +2,7 @@ package kinesis
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -42,10 +43,14 @@ func (k *KinesisEventBus) Publish(events []*gocqrs.EventMessage) error {
 	}
 	wg.Wait()
 
-	_, err := k.kin.PutRecords(&kinesis.PutRecordsInput{
+	out, err := k.kin.PutRecords(&kinesis.PutRecordsInput{
 		Records:    records,
 		StreamName: sstreamName,
 	})
+
+	if *out.FailedRecordCount > 0 {
+		log.Println("Kinesis Put Failed: ", *out.FailedRecordCount, "records")
+	}
 
 	return err
 }
