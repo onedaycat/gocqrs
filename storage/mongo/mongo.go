@@ -113,15 +113,72 @@ func (m *MongoEventStore) CreateSchema() error {
 }
 
 func (m *MongoEventStore) Get(id string, time int64) ([]*gocqrs.EventMessage, error) {
-	return nil, nil
+	ctx := context.Background()
+
+	cursor, err := m.event.Find(ctx,
+		bson.D{
+			{"a", id},
+			{"t", bson.D{{"$gt", time}}},
+		},
+		getOpts,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	ems := []*gocqrs.EventMessage{}
+	for cursor.Next(ctx) {
+		em := gocqrs.EventMessage{}
+		cursor.Decode(&em)
+
+		ems = append(ems, &em)
+	}
+
+	return ems, nil
 }
 
 func (m *MongoEventStore) GetByEventType(eventType gocqrs.EventType, time int64) ([]*gocqrs.EventMessage, error) {
-	return nil, nil
+	ctx := context.Background()
+
+	cursor, err := m.event.Find(ctx, bson.D{
+		{"e", eventType},
+		{"t", bson.D{{"$gt", time}}},
+	}, getOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	ems := []*gocqrs.EventMessage{}
+	for cursor.Next(ctx) {
+		em := gocqrs.EventMessage{}
+		cursor.Decode(&em)
+
+		ems = append(ems, &em)
+	}
+
+	return ems, nil
 }
 
 func (m *MongoEventStore) GetByAggregateType(aggType gocqrs.AggregateType, time int64) ([]*gocqrs.EventMessage, error) {
-	return nil, nil
+	ctx := context.Background()
+
+	cursor, err := m.event.Find(ctx, bson.D{
+		{"b", aggType},
+		{"t", bson.D{{"$gt", time}}},
+	}, getOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	ems := []*gocqrs.EventMessage{}
+	for cursor.Next(ctx) {
+		em := gocqrs.EventMessage{}
+		cursor.Decode(&em)
+
+		ems = append(ems, &em)
+	}
+
+	return ems, nil
 }
 
 func (m *MongoEventStore) GetSnapshot(id string) (*gocqrs.Snapshot, error) {

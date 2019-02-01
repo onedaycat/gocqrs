@@ -5,14 +5,16 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mongodb/mongo-go-driver/mongo"
 	"github.com/onedaycat/gocqrs"
 	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
+	"github.com/onedaycat/gocqrs/internal/clock"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGet2(t *testing.T) {
+func newDB(t *testing.T) *MongoEventStore {
 	client, err := mongo.NewClient(os.Getenv("MONGODB_ENDPOINT"))
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -24,7 +26,13 @@ func TestGet2(t *testing.T) {
 	err = db.CreateSchema()
 	require.NoError(t, err)
 
+	return db
+}
+
+func TestGet2(t *testing.T) {
+	db := newDB(t)
 	es := gocqrs.NewEventStore(db, nil)
+
 	wg := sync.WaitGroup{}
 
 	wg.Add(2)
@@ -53,18 +61,8 @@ func TestGet2(t *testing.T) {
 	wg.Wait()
 }
 
-func TestGet(t *testing.T) {
-	client, err := mongo.NewClient(os.Getenv("MONGODB_ENDPOINT"))
-	require.NoError(t, err)
-	ctx := context.Background()
-	client.Connect(ctx)
-
-	db := NewMongoEventStore(client, "eventsourcing_dev")
-
-	db.DropSchema()
-	err = db.CreateSchema()
-	require.NoError(t, err)
-
+func TestGetSnapShot(t *testing.T) {
+	db := newDB(t)
 	es := gocqrs.NewEventStore(db, nil)
 
 	st := stock.NewStockItem("1")
@@ -74,7 +72,7 @@ func TestGet(t *testing.T) {
 	st.Add(3)
 	st.Remove()
 
-	err = es.Save(st)
+	err := es.Save(st)
 	require.NoError(t, err)
 
 	expSt := &stock.StockItem{
@@ -88,4 +86,36 @@ func TestGet(t *testing.T) {
 	err = es.GetSnapshot("1", expSt)
 	require.NoError(t, err)
 	require.Equal(t, expSt, st)
+}
+
+func TestGet(t *testing.T) {
+	db := newDB(t)
+	es := gocqrs.NewEventStore(db, nil)
+	now := time.Now()
+
+	// Step 1
+	clock.Freeze(now)
+	st := stock.NewStockItem("1")
+	st.Add(10)
+	st.Sub(5)
+
+	err := es.Save(st)
+	require.NoError(t, err)
+
+	// Step 2
+	clock.Freeze(now.Add(time.Second * 5))
+	err = es.Get("1", st)
+	require.NoError(t, err)
+	st.Add(2)
+	st.Add(3)
+	st.Add(6)
+	st.Remove()
+
+	err = es.Save(st)
+	require.NoError(t, err)
+
+	// Assert
+	events, err := db.Get("1", now.Unix())
+	require.NoError(t, err)
+	require.Len(t, events, 5)
 }
