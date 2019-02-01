@@ -2,9 +2,12 @@ package gocqrs
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
+
+// RetryHandler if return bool is true is allow retry,
+// if return bool is false no retry
+type RetryHandler func() (error, bool)
 
 type EventStore interface {
 	Get(id string, agg AggregateRoot) error
@@ -110,9 +113,6 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		// 	return err
 		// }
 
-		// fmt.Println("wait 5s")
-		// time.Sleep(time.Second * 5)
-
 		// if err != ErrNotFound {
 		// 	if curSnap.Version+1 != payloads[0].Version {
 		// 		return ErrVersionInconsistency
@@ -124,9 +124,24 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		}
 
 		agg.ClearEvents()
-		fmt.Println("done")
 
 		return nil
 	})
+}
 
+func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) {
+	var err error
+	var isRetry bool
+	currentRetry := 0
+	for currentRetry < numberRetry {
+		if err, isRetry = fn(); err == nil || !isRetry {
+			return
+		}
+
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		currentRetry++
+	}
 }

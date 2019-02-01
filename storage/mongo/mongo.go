@@ -11,13 +11,16 @@ import (
 	"github.com/onedaycat/gocqrs"
 )
 
-var getOpts = options.Find().SetSort(bson.D{{xid, 1}})
-var getByVersionOpts = options.Find().SetSort(bson.D{{xid, 1}})
-var getByTimeOpts = options.Find().SetSort(bson.D{{xid, 1}})
-var upsertOpts = options.Replace().SetUpsert(true)
-var xid = "_id"
-var emptyStr = ""
-var errDupCode = 11000
+var (
+	getOpts           = options.Find().SetSort(bson.D{{xid, 1}})
+	getByVersionOpts  = options.Find().SetSort(bson.D{{xid, 1}})
+	getByTimeOpts     = options.Find().SetSort(bson.D{{xid, 1}})
+	upsertOpts        = options.Replace().SetUpsert(true)
+	xid               = "_id"
+	emptyStr          = ""
+	errDupCode        = 11000
+	insertManyOrdered = options.InsertMany().SetOrdered(true)
+)
 
 type MongoEventStore struct {
 	client   *mongo.Client
@@ -166,7 +169,7 @@ func (m *MongoEventStore) Save(ctx context.Context, payloads []*gocqrs.EventMess
 		docs[i] = payloads[i]
 	}
 
-	_, err := m.event.InsertMany(ctx, docs)
+	_, err := m.event.InsertMany(ctx, docs, insertManyOrdered)
 	if err != nil {
 		aerr, ok := err.(mongo.BulkWriteException)
 		if ok {
