@@ -16,6 +16,7 @@ var getByVersionOpts = options.Find().SetSort(bson.D{{xid, 1}})
 var getByTimeOpts = options.Find().SetSort(bson.D{{xid, 1}})
 var upsertOpts = options.Replace().SetUpsert(true)
 var xid = "_id"
+var emptyStr = ""
 
 type MongoEventStore struct {
 	client   *mongo.Client
@@ -169,4 +170,14 @@ func (m *MongoEventStore) Save(ctx context.Context, payloads []*gocqrs.EventMess
 	}, snapshot, upsertOpts)
 
 	return err
+}
+
+func createToken(limit int, length int, events []*gocqrs.EventMessage) ([]*gocqrs.EventMessage, string) {
+	if limit != 0 && length > limit {
+		lastIndex := length - 1
+		newEvents := events[:lastIndex]
+		return newEvents, newEvents[lastIndex].ID
+	}
+
+	return events, emptyStr
 }
