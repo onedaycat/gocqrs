@@ -65,20 +65,12 @@ func (m *MongoEventStore) CreateSchema() error {
 	if _, err := m.event.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Options: options.Index().
-				SetName("aggUnique").
-				SetUnique(true),
-			Keys: bsonx.Doc{
-				{"a", bsonx.Int32(1)},
-				{"v", bsonx.Int32(1)},
-			},
-		},
-		{
-			Options: options.Index().
 				SetName("aggAsc").
 				SetUnique(true),
 			Keys: bsonx.Doc{
 				{"a", bsonx.Int32(1)},
-				{"_id", bsonx.Int32(1)},
+				{"v", bsonx.Int32(1)},
+				{"t", bsonx.Int32(1)},
 			},
 		},
 		{
@@ -87,7 +79,8 @@ func (m *MongoEventStore) CreateSchema() error {
 				SetUnique(true),
 			Keys: bsonx.Doc{
 				{"b", bsonx.Int32(1)},
-				{"_id", bsonx.Int32(1)},
+				{"v", bsonx.Int32(1)},
+				{"t", bsonx.Int32(1)},
 			},
 		},
 		{
@@ -95,9 +88,9 @@ func (m *MongoEventStore) CreateSchema() error {
 				SetName("eventTypeAsc").
 				SetUnique(true),
 			Keys: bsonx.Doc{
-
 				{"e", bsonx.Int32(1)},
-				{"_id", bsonx.Int32(1)},
+				{"v", bsonx.Int32(1)},
+				{"t", bsonx.Int32(1)},
 			},
 		},
 	}); err != nil {
@@ -111,7 +104,7 @@ func (m *MongoEventStore) CreateSchema() error {
 				SetUnique(true),
 			Keys: bsonx.Doc{
 				{"b", bsonx.Int32(1)},
-				{"_id", bsonx.Int32(1)},
+				{"_id", bsonx.Int32(-1)},
 			},
 		},
 	})

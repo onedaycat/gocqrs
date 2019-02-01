@@ -3,6 +3,9 @@ package gocqrs
 import (
 	"context"
 	"time"
+
+	"github.com/onedaycat/gocqrs/internal/clock"
+	"github.com/onedaycat/gocqrs/internal/eid"
 )
 
 // RetryHandler if return bool is true is allow retry,
@@ -77,14 +80,14 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	}
 
 	payloads := make([]*EventMessage, len(events))
-	now := time.Now().UTC().Unix()
+	now := clock.Now().Unix()
 	aggType := agg.GetAggregateType()
 	var lastEvent *EventMessage
 
 	for i := 0; i < len(events); i++ {
 		agg.IncreaseVersion()
 		payloads[i] = &EventMessage{
-			ID:            generateID(),
+			ID:            eid.New(agg.GetAggregateID(), agg.GetVersion()).String(),
 			AggregateID:   agg.GetAggregateID(),
 			AggregateType: aggType,
 			Version:       agg.GetVersion(),
