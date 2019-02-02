@@ -20,6 +20,7 @@ type AggregateRoot interface {
 	Publish(event Event)
 	MarkAsRemoved()
 	IsRemoved() bool
+	IsNew() bool
 }
 
 type AggregateBase struct {
@@ -88,4 +89,8 @@ func (a *AggregateBase) ClearEvents() {
 
 func (a *AggregateBase) IncreaseVersion() {
 	a.version++
+}
+
+func (a *AggregateBase) IsNew() bool {
+	return a.version == 0 && len(a.events) == 0
 }

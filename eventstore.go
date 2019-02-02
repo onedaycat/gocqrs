@@ -2,7 +2,6 @@ package gocqrs
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/onedaycat/gocqrs/internal/clock"
@@ -17,10 +16,10 @@ type SubscribeHandler func(events []*EventMessage)
 
 //go:generate mockery -name=EventStore
 type EventStore interface {
-	Get(aggID string, agg AggregateRoot) error
-	GetByTime(aggID string, time int64, agg AggregateRoot) ([]*EventMessage, error)
-	GetByEventType(eventType EventType, time int64) ([]*EventMessage, error)
-	GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error)
+	Get(aggID string, agg AggregateRoot, seq int64) error
+	GetByTime(aggID string, seq int64, agg AggregateRoot) ([]*EventMessage, error)
+	GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error)
+	GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error)
 	GetSnapshot(aggID string, agg AggregateRoot) error
 	Save(agg AggregateRoot) error
 }
@@ -34,8 +33,8 @@ func NewEventStore(storage Storage, eventBus EventBus) EventStore {
 	return &eventStore{storage, eventBus}
 }
 
-func (es *eventStore) Get(id string, agg AggregateRoot) error {
-	events, err := es.storage.Get(id, 0)
+func (es *eventStore) Get(id string, agg AggregateRoot, seq int64) error {
+	events, err := es.storage.Get(id, seq)
 	if err != nil {
 		return err
 	}
@@ -57,19 +56,32 @@ func (es *eventStore) Get(id string, agg AggregateRoot) error {
 		}
 	}
 
+	for n >= 100 {
+		if err = es.Get(id, agg, event.Seq); err != nil {
+			if err == ErrNotFound {
+				break
+			}
+			return err
+		}
+	}
+
+	if agg.IsNew() {
+		return ErrNotFound
+	}
+
 	return nil
 }
 
-func (es *eventStore) GetByTime(id string, time int64, agg AggregateRoot) ([]*EventMessage, error) {
-	return es.storage.Get(id, time)
+func (es *eventStore) GetByTime(id string, seq int64, agg AggregateRoot) ([]*EventMessage, error) {
+	return es.storage.Get(id, seq)
 }
 
-func (es *eventStore) GetByEventType(eventType EventType, time int64) ([]*EventMessage, error) {
-	return es.storage.GetByEventType(eventType, time)
+func (es *eventStore) GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error) {
+	return es.storage.GetByEventType(eventType, seq)
 }
 
-func (es *eventStore) GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error) {
-	return es.storage.GetByAggregateType(aggType, time)
+func (es *eventStore) GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error) {
+	return es.storage.GetByAggregateType(aggType, seq)
 }
 
 func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
@@ -119,7 +131,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 			Type:          events[i].GetEventType(),
 			Payload:       NewPayload(events[i]),
 			Time:          now,
-			Seq:           strconv.FormatInt((now*10000)+int64(version), 10),
+			Seq:           WithSeq(now, int64(version)),
 		}
 
 		if len(events)-1 == i {
@@ -179,4 +191,16 @@ func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {
 	}
 
 	return nil
+}
+
+func WithSeq(time int64, version int64) int64 {
+	if time < 0 {
+		return 0
+	}
+
+	if version < 0 {
+		version = 0
+	}
+
+	return (time * 100000) + version
 }

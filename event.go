@@ -10,7 +10,7 @@ type EventMessage struct {
 	Version       int           `json:"v" bson:"v"`
 	Payload       *Payload      `json:"p" bson:"p"`
 	Time          int64         `json:"t" bson:"t"`
-	Seq           string        `json:"s" bson:"s"`
+	Seq           int64         `json:"s" bson:"s"`
 }
 
 type Event interface {

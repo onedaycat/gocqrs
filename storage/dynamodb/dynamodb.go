@@ -15,7 +15,7 @@ import (
 const (
 	xid                  = "id"
 	emptyStr             = ""
-	timeKV               = ":t"
+	seqKV                = ":s"
 	getKV                = ":a"
 	getByEventTypeKV     = ":et"
 	getByAggregateTypeKV = ":b"
@@ -26,11 +26,11 @@ var (
 	bSIndex                        = aws.String("b-s-index")
 	saveCond                       = aws.String("attribute_not_exists(s)")
 	getCond                        = aws.String("a=:a")
-	getCondWithTime                = aws.String("a=:a and s > :t")
+	getCondWithTime                = aws.String("a=:a and s > :s")
 	getByEventTypeCond             = aws.String("e=:et")
-	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :t")
+	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :s")
 	getByAggregateTypeCond         = aws.String("b=:b")
-	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :t")
+	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :s")
 	limit                          = aws.Int64(100)
 )
 
@@ -65,7 +65,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
 					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
-					"s": &dynamodb.AttributeValue{S: output.Items[i]["s"].S},
+					"s": &dynamodb.AttributeValue{N: output.Items[i]["s"].N},
 				},
 			},
 		}
@@ -131,7 +131,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 			},
 			{
 				AttributeName: aws.String("s"),
-				AttributeType: aws.String("S"),
+				AttributeType: aws.String("N"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
@@ -214,20 +214,21 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 	return nil
 }
 
-func (d *DynamoDBEventStore) Get(aggID string, time int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) Get(aggID string, seq int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getKV: &dynamodb.AttributeValue{S: &aggID},
 	}
 
-	if time > 0 {
-		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+	if seq > 0 {
+		exValue[seqKV] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(seq, 10))}
 		keyCond = getCondWithTime
 	}
 
 	output, err := d.db.Query(&dynamodb.QueryInput{
 		TableName:                 &d.eventstoreTable,
 		KeyConditionExpression:    keyCond,
+		Limit:                     limit,
 		ExpressionAttributeValues: exValue,
 	})
 
@@ -247,14 +248,14 @@ func (d *DynamoDBEventStore) Get(aggID string, time int64) ([]*gocqrs.EventMessa
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, time int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByEventTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByEventTypeKV: &dynamodb.AttributeValue{S: &eventType},
 	}
 
-	if time > 0 {
-		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+	if seq > 0 {
+		exValue[seqKV] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(seq, 10))}
 		keyCond = getByEventTypeWithTimeCond
 	}
 
@@ -282,14 +283,14 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, time int
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, time int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, seq int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByAggregateTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByAggregateTypeKV: &dynamodb.AttributeValue{S: &aggType},
 	}
 
-	if time > 0 {
-		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+	if seq > 0 {
+		exValue[seqKV] = &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(seq, 10))}
 		keyCond = getByAggregateTypeWithTimeCond
 	}
 
