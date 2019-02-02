@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
-	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
+	"github.com/onedaycat/gocqrs/example/ecom/stock/domain"
 	"github.com/onedaycat/gocqrs/internal/clock"
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +45,7 @@ func TestSaveAndGet(t *testing.T) {
 	now1 := time.Now().UTC().Add(time.Second * -10)
 	now2 := time.Now().UTC().Add(time.Second * -5)
 
-	st := stock.NewStockItem()
+	st := domain.NewStockItem()
 	st.Create("1", 0)
 	st.Add(10)
 	st.Sub(5)
@@ -57,7 +57,7 @@ func TestSaveAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	// GetAggregate
-	st2 := stock.NewStockItem()
+	st2 := domain.NewStockItem()
 	err = es.GetAggregate(st.GetAggregateID(), st2, 0)
 	require.NoError(t, err)
 	require.Equal(t, st, st2)
@@ -73,27 +73,27 @@ func TestSaveAndGet(t *testing.T) {
 	err = es.Save(st)
 	require.NoError(t, err)
 
-	st3 := stock.NewStockItem()
+	st3 := domain.NewStockItem()
 	events, err := es.Get(st.GetAggregateID(), gocqrs.NewSeq(now2.Unix(), 0), st3)
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
-	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
 	require.Equal(t, int64(6), events[0].Version)
-	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
+	require.Equal(t, domain.StockItemRemovedEvent, events[1].Type)
 	require.Equal(t, int64(7), events[1].Version)
 
 	// GetSnapshot
-	st4 := stock.NewStockItem()
+	st4 := domain.NewStockItem()
 	err = es.GetSnapshot(st.GetAggregateID(), st4)
 	require.NoError(t, err)
 	require.Equal(t, st4, st)
 
 	// GetByEventType
-	events, err = es.GetByEventType(stock.StockItemUpdatedEvent, gocqrs.NewSeq(now2.Unix(), 0))
+	events, err = es.GetByEventType(domain.StockItemUpdatedEvent, gocqrs.NewSeq(now2.Unix(), 0))
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
 	require.Equal(t, int64(6), events[0].Version)
 
 	// GetByAggregateType
@@ -101,9 +101,9 @@ func TestSaveAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
-	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
 	require.Equal(t, int64(6), events[0].Version)
-	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
+	require.Equal(t, domain.StockItemRemovedEvent, events[1].Type)
 	require.Equal(t, int64(7), events[1].Version)
 }
 
@@ -113,18 +113,18 @@ func TestNotFound(t *testing.T) {
 	es := gocqrs.NewEventStore(db, nil)
 
 	// GetAggregate
-	st := stock.NewStockItem()
+	st := domain.NewStockItem()
 	err := es.GetAggregate(st.GetAggregateID(), st, 0)
 	require.Equal(t, gocqrs.ErrNotFound, err)
 
 	// Get
-	st3 := stock.NewStockItem()
+	st3 := domain.NewStockItem()
 	events, err := es.Get(st.GetAggregateID(), 0, st3)
 	require.Nil(t, err)
 	require.Nil(t, events)
 
 	// GetSnapshot
-	st4 := stock.NewStockItem()
+	st4 := domain.NewStockItem()
 	err = es.GetSnapshot(st.GetAggregateID(), st4)
 	require.Equal(t, gocqrs.ErrNotFound, err)
 	require.Nil(t, events)
@@ -152,7 +152,7 @@ func TestConcurency(t *testing.T) {
 	var err1 error
 	var err2 error
 	go func() {
-		st := stock.NewStockItem()
+		st := domain.NewStockItem()
 		st.SetAggregateID("a1")
 		st.Create("1", 0)
 		st.Add(10)
@@ -166,7 +166,7 @@ func TestConcurency(t *testing.T) {
 	}()
 
 	go func() {
-		st := stock.NewStockItem()
+		st := domain.NewStockItem()
 		st.SetAggregateID("a1")
 		st.Create("1", 0)
 		st.Remove()

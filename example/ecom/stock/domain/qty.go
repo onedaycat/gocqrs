@@ -1,4 +1,4 @@
-package stock
+package domain
 
 import "errors"
 

@@ -25,13 +25,13 @@ func (_m *Storage) BeginTx(fn func(context.Context) error) error {
 	return r0
 }
 
-// Get provides a mock function with given fields: aggID, time
-func (_m *Storage) Get(aggID string, time int64) ([]*gocqrs.EventMessage, error) {
-	ret := _m.Called(aggID, time)
+// Get provides a mock function with given fields: aggID, seq, limit
+func (_m *Storage) Get(aggID string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+	ret := _m.Called(aggID, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
-	if rf, ok := ret.Get(0).(func(string, int64) []*gocqrs.EventMessage); ok {
-		r0 = rf(aggID, time)
+	if rf, ok := ret.Get(0).(func(string, int64, int64) []*gocqrs.EventMessage); ok {
+		r0 = rf(aggID, seq, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*gocqrs.EventMessage)
@@ -39,8 +39,8 @@ func (_m *Storage) Get(aggID string, time int64) ([]*gocqrs.EventMessage, error)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, int64) error); ok {
-		r1 = rf(aggID, time)
+	if rf, ok := ret.Get(1).(func(string, int64, int64) error); ok {
+		r1 = rf(aggID, seq, limit)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -48,13 +48,13 @@ func (_m *Storage) Get(aggID string, time int64) ([]*gocqrs.EventMessage, error)
 	return r0, r1
 }
 
-// GetByAggregateType provides a mock function with given fields: aggType, time
-func (_m *Storage) GetByAggregateType(aggType string, time int64) ([]*gocqrs.EventMessage, error) {
-	ret := _m.Called(aggType, time)
+// GetByAggregateType provides a mock function with given fields: aggType, seq, limit
+func (_m *Storage) GetByAggregateType(aggType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+	ret := _m.Called(aggType, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
-	if rf, ok := ret.Get(0).(func(string, int64) []*gocqrs.EventMessage); ok {
-		r0 = rf(aggType, time)
+	if rf, ok := ret.Get(0).(func(string, int64, int64) []*gocqrs.EventMessage); ok {
+		r0 = rf(aggType, seq, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*gocqrs.EventMessage)
@@ -62,8 +62,8 @@ func (_m *Storage) GetByAggregateType(aggType string, time int64) ([]*gocqrs.Eve
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, int64) error); ok {
-		r1 = rf(aggType, time)
+	if rf, ok := ret.Get(1).(func(string, int64, int64) error); ok {
+		r1 = rf(aggType, seq, limit)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -71,13 +71,13 @@ func (_m *Storage) GetByAggregateType(aggType string, time int64) ([]*gocqrs.Eve
 	return r0, r1
 }
 
-// GetByEventType provides a mock function with given fields: eventType, time
-func (_m *Storage) GetByEventType(eventType string, time int64) ([]*gocqrs.EventMessage, error) {
-	ret := _m.Called(eventType, time)
+// GetByEventType provides a mock function with given fields: eventType, seq, limit
+func (_m *Storage) GetByEventType(eventType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+	ret := _m.Called(eventType, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
-	if rf, ok := ret.Get(0).(func(string, int64) []*gocqrs.EventMessage); ok {
-		r0 = rf(eventType, time)
+	if rf, ok := ret.Get(0).(func(string, int64, int64) []*gocqrs.EventMessage); ok {
+		r0 = rf(eventType, seq, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*gocqrs.EventMessage)
@@ -85,8 +85,8 @@ func (_m *Storage) GetByEventType(eventType string, time int64) ([]*gocqrs.Event
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, int64) error); ok {
-		r1 = rf(eventType, time)
+	if rf, ok := ret.Get(1).(func(string, int64, int64) error); ok {
+		r1 = rf(eventType, seq, limit)
 	} else {
 		r1 = ret.Error(1)
 	}
