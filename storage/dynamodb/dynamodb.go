@@ -195,10 +195,6 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				AttributeName: aws.String("id"),
 				AttributeType: aws.String("S"),
 			},
-			{
-				AttributeName: aws.String("b"),
-				AttributeType: aws.String("S"),
-			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
