@@ -62,6 +62,9 @@ func TestSaveAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, st, st2)
 
+	err = es.GetAggregate(st.GetAggregateID(), st2, gocqrs.NewSeq(st2.GetLastUpdate(), st2.GetVersion()))
+	require.Equal(t, gocqrs.ErrNotFound, err)
+
 	// Get
 	st.Add(2)
 	st.Remove()
@@ -76,9 +79,9 @@ func TestSaveAndGet(t *testing.T) {
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
 	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, 6, events[0].Version)
+	require.Equal(t, int64(6), events[0].Version)
 	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
-	require.Equal(t, 7, events[1].Version)
+	require.Equal(t, int64(7), events[1].Version)
 
 	// GetSnapshot
 	st4 := stock.NewStockItem()
@@ -91,7 +94,7 @@ func TestSaveAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, 6, events[0].Version)
+	require.Equal(t, int64(6), events[0].Version)
 
 	// GetByAggregateType
 	events, err = es.GetByAggregateType(st.GetAggregateType(), gocqrs.NewSeq(now2.Unix(), 0))
@@ -99,9 +102,9 @@ func TestSaveAndGet(t *testing.T) {
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
 	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, 6, events[0].Version)
+	require.Equal(t, int64(6), events[0].Version)
 	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
-	require.Equal(t, 7, events[1].Version)
+	require.Equal(t, int64(7), events[1].Version)
 }
 
 func TestNotFound(t *testing.T) {

@@ -11,9 +11,11 @@ type AggregateRoot interface {
 	GetAggregateID() string
 	SetAggregateID(id string)
 	GetAggregateType() AggregateType
-	GetVersion() int
-	SetVersion(version int)
-	GetCurrentVersion() int
+	GetVersion() int64
+	SetVersion(version int64)
+	GetCurrentVersion() int64
+	GetLastUpdate() int64
+	SetLastUpdate(t int64)
 	IncreaseVersion()
 	GetEvents() []Event
 	ClearEvents()
@@ -24,10 +26,11 @@ type AggregateRoot interface {
 }
 
 type AggregateBase struct {
-	id      string
-	events  []Event
-	removed bool
-	version int
+	id         string
+	events     []Event
+	removed    bool
+	version    int64
+	lastUpdate int64
 }
 
 // InitAggregate if id is empty, id will be generated
@@ -71,16 +74,16 @@ func (a *AggregateBase) IsRemoved() bool {
 	return a.removed
 }
 
-func (a *AggregateBase) GetVersion() int {
+func (a *AggregateBase) GetVersion() int64 {
 	return a.version
 }
 
-func (a *AggregateBase) SetVersion(version int) {
+func (a *AggregateBase) SetVersion(version int64) {
 	a.version = version
 }
 
-func (a *AggregateBase) GetCurrentVersion() int {
-	return a.version + len(a.events)
+func (a *AggregateBase) GetCurrentVersion() int64 {
+	return a.version + int64(len(a.events))
 }
 
 func (a *AggregateBase) ClearEvents() {
@@ -93,4 +96,12 @@ func (a *AggregateBase) IncreaseVersion() {
 
 func (a *AggregateBase) IsNew() bool {
 	return a.version == 0 && len(a.events) == 0
+}
+
+func (a *AggregateBase) GetLastUpdate() int64 {
+	return a.lastUpdate
+}
+
+func (a *AggregateBase) SetLastUpdate(lastUpdate int64) {
+	a.lastUpdate = lastUpdate
 }

@@ -53,10 +53,11 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 		return ErrNotFound
 	}
 
-	event := events[n-1]
+	lastEvent := events[n-1]
 
-	agg.SetAggregateID(event.AggregateID)
-	agg.SetVersion(event.Version)
+	agg.SetAggregateID(lastEvent.AggregateID)
+	agg.SetVersion(lastEvent.Version)
+	agg.SetLastUpdate(lastEvent.Time)
 
 	for _, event := range events {
 		if err = agg.Apply(event); err != nil {
@@ -65,7 +66,7 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 	}
 
 	for n >= es.limitInt {
-		if err = es.GetAggregate(id, agg, event.Seq); err != nil {
+		if err = es.GetAggregate(id, agg, lastEvent.Seq); err != nil {
 			if err == ErrNotFound {
 				break
 			}
@@ -100,6 +101,7 @@ func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
 
 	agg.SetAggregateID(snapshot.ID)
 	agg.SetVersion(snapshot.Version)
+	agg.SetLastUpdate(snapshot.LastUpdate)
 	if snapshot.IsRemoved {
 		agg.MarkAsRemoved()
 	}
@@ -139,7 +141,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 			Type:          events[i].GetEventType(),
 			Payload:       NewPayload(events[i]),
 			Time:          now,
-			Seq:           NewSeq(now, int64(version)),
+			Seq:           NewSeq(now, version),
 		}
 
 		if len(events)-1 == i {
@@ -153,6 +155,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		Version:       agg.GetVersion(),
 		Payload:       NewPayload(agg),
 		LastEvent:     lastEvent,
+		LastUpdate:    lastEvent.Time,
 		IsRemoved:     agg.IsRemoved(),
 	}
 
@@ -173,6 +176,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		}
 
 		agg.ClearEvents()
+		agg.SetLastUpdate(lastEvent.Time)
 
 		return nil
 	})

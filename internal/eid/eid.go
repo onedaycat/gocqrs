@@ -19,8 +19,8 @@ func UnFreezeAggregateID() {
 	freezeaid = emptyStr
 }
 
-func CreateEID(aggID string, version int) string {
-	return aggID + strconv.Itoa(version)
+func CreateEID(aggID string, version int64) string {
+	return aggID + strconv.FormatInt(version, 10)
 }
 
 func GenerateAggregateID() string {

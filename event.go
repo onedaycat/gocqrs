@@ -7,7 +7,7 @@ type EventMessage struct {
 	AggregateID   string        `json:"a" bson:"a"`
 	AggregateType AggregateType `json:"b" bson:"b"`
 	Type          EventType     `json:"e" bson:"e"`
-	Version       int           `json:"v" bson:"v"`
+	Version       int64         `json:"v" bson:"v"`
 	Payload       *Payload      `json:"p" bson:"p"`
 	Time          int64         `json:"t" bson:"t"`
 	Seq           int64         `json:"s" bson:"s"`
