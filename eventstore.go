@@ -133,16 +133,6 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	}
 
 	return es.storage.BeginTx(func(ctx context.Context) error {
-		// curSnap, err := es.storage.GetSnapshot(snapshot.ID)
-		// if err != nil && err != ErrNotFound {
-		// 	return err
-		// }
-
-		// if err != ErrNotFound {
-		// 	if curSnap.Version+1 != payloads[0].Version {
-		// 		return ErrVersionInconsistency
-		// 	}
-		// }
 
 		if err := es.storage.Save(ctx, payloads, snapshot); err != nil {
 			return err
