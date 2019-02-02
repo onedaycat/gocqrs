@@ -12,14 +12,31 @@ import (
 	"github.com/onedaycat/gocqrs"
 )
 
-const eventsnapshot = "eventsnapshot"
-const eventstore = "eventstore"
-const xid = "id"
+const (
+	eventsnapshot        = "eventsnapshot"
+	eventstore           = "eventstore"
+	xid                  = "id"
+	emptyStr             = ""
+	timeKV               = ":t"
+	getKV                = ":a"
+	getByEventTypeKV     = ":et"
+	getByAggregateTypeKV = ":b"
+)
 
-var bIDIndex = aws.String("b-id-index")
-var eIDIndex = aws.String("e-id-index")
-var seventsnapshot = aws.String(eventsnapshot)
-var seventstore = aws.String(eventstore)
+var (
+	bIDIndex                       = aws.String("b-id-index")
+	eSIndex                        = aws.String("e-s-index")
+	bSIndex                        = aws.String("b-s-index")
+	seventsnapshot                 = aws.String(eventsnapshot)
+	seventstore                    = aws.String(eventstore)
+	saveCond                       = aws.String("attribute_not_exists(s)")
+	getCond                        = aws.String("a=:a")
+	getCondWithTime                = aws.String("a=:a and s > :t")
+	getByEventTypeCond             = aws.String("e=:et")
+	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :t")
+	getByAggregateTypeCond         = aws.String("b=:b")
+	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :t")
+)
 
 type DynamoDBEventStore struct {
 	db *dynamodb.DynamoDB
@@ -47,8 +64,8 @@ func (d *DynamoDBEventStore) TruncateTables() {
 		keyStores[i] = &dynamodb.WriteRequest{
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
-					"a":  &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
-					"id": &dynamodb.AttributeValue{S: output.Items[i]["id"].S},
+					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
+					"s": &dynamodb.AttributeValue{S: output.Items[i]["s"].S},
 				},
 			},
 		}
@@ -105,10 +122,6 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				AttributeType: aws.String("S"),
 			},
 			{
-				AttributeName: aws.String("id"),
-				AttributeType: aws.String("S"),
-			},
-			{
 				AttributeName: aws.String("e"),
 				AttributeType: aws.String("S"),
 			},
@@ -117,7 +130,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				AttributeType: aws.String("S"),
 			},
 			{
-				AttributeName: aws.String("v"),
+				AttributeName: aws.String("s"),
 				AttributeType: aws.String("S"),
 			},
 		},
@@ -127,29 +140,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				KeyType:       aws.String("HASH"),
 			},
 			{
-				AttributeName: aws.String("v"),
+				AttributeName: aws.String("s"),
 				KeyType:       aws.String("RANGE"),
 			},
 		},
 		GlobalSecondaryIndexes: []*dynamodb.GlobalSecondaryIndex{
 			{
-				IndexName: aws.String("a-id-index"),
-				Projection: &dynamodb.Projection{
-					ProjectionType: aws.String("ALL"),
-				},
-				KeySchema: []*dynamodb.KeySchemaElement{
-					{
-						AttributeName: aws.String("a"),
-						KeyType:       aws.String("HASH"),
-					},
-					{
-						AttributeName: aws.String("id"),
-						KeyType:       aws.String("RANGE"),
-					},
-				},
-			},
-			{
-				IndexName: aws.String("e-id-index"),
+				IndexName: aws.String("e-s-index"),
 				Projection: &dynamodb.Projection{
 					ProjectionType: aws.String("ALL"),
 				},
@@ -159,13 +156,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 						KeyType:       aws.String("HASH"),
 					},
 					{
-						AttributeName: aws.String("id"),
+						AttributeName: aws.String("s"),
 						KeyType:       aws.String("RANGE"),
 					},
 				},
 			},
 			{
-				IndexName: aws.String("b-id-index"),
+				IndexName: aws.String("b-s-index"),
 				Projection: &dynamodb.Projection{
 					ProjectionType: aws.String("ALL"),
 				},
@@ -175,7 +172,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 						KeyType:       aws.String("HASH"),
 					},
 					{
-						AttributeName: aws.String("id"),
+						AttributeName: aws.String("s"),
 						KeyType:       aws.String("RANGE"),
 					},
 				},
@@ -239,23 +236,112 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 	return nil
 }
 
-func (d *DynamoDBEventStore) Get(id string, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, string, error) {
-	return nil, "", nil
+func (d *DynamoDBEventStore) Get(aggID string, time int64) ([]*gocqrs.EventMessage, error) {
+	keyCond := getCond
+	exValue := map[string]*dynamodb.AttributeValue{
+		getKV: &dynamodb.AttributeValue{S: &aggID},
+	}
+
+	if time > 0 {
+		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+		keyCond = getCondWithTime
+	}
+
+	output, err := d.db.Query(&dynamodb.QueryInput{
+		TableName:                 seventstore,
+		KeyConditionExpression:    keyCond,
+		ExpressionAttributeValues: exValue,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(output.Items) == 0 {
+		return nil, nil
+	}
+
+	snapshots := make([]*gocqrs.EventMessage, 0, len(output.Items))
+	if err = dynamodbattribute.UnmarshalListOfMaps(output.Items, &snapshots); err != nil {
+		return nil, err
+	}
+
+	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, error) {
-	return nil, nil
+func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, time int64) ([]*gocqrs.EventMessage, error) {
+	keyCond := getByEventTypeCond
+	exValue := map[string]*dynamodb.AttributeValue{
+		getByEventTypeKV: &dynamodb.AttributeValue{S: &eventType},
+	}
+
+	if time > 0 {
+		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+		keyCond = getByEventTypeWithTimeCond
+	}
+
+	output, err := d.db.Query(&dynamodb.QueryInput{
+		TableName:                 seventstore,
+		IndexName:                 eSIndex,
+		KeyConditionExpression:    keyCond,
+		ExpressionAttributeValues: exValue,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(output.Items) == 0 {
+		return nil, nil
+	}
+
+	snapshots := make([]*gocqrs.EventMessage, 0, len(output.Items))
+	if err = dynamodbattribute.UnmarshalListOfMaps(output.Items, &snapshots); err != nil {
+		return nil, err
+	}
+
+	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, time int64, limit int, nextToken string) ([]*gocqrs.EventMessage, error) {
-	return nil, nil
+func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, time int64) ([]*gocqrs.EventMessage, error) {
+	keyCond := getByAggregateTypeCond
+	exValue := map[string]*dynamodb.AttributeValue{
+		getByAggregateTypeKV: &dynamodb.AttributeValue{S: &aggType},
+	}
+
+	if time > 0 {
+		exValue[timeKV] = &dynamodb.AttributeValue{S: aws.String(strconv.FormatInt(time, 10))}
+		keyCond = getByAggregateTypeWithTimeCond
+	}
+
+	output, err := d.db.Query(&dynamodb.QueryInput{
+		TableName:                 seventstore,
+		IndexName:                 bSIndex,
+		KeyConditionExpression:    keyCond,
+		ExpressionAttributeValues: exValue,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(output.Items) == 0 {
+		return nil, nil
+	}
+
+	snapshots := make([]*gocqrs.EventMessage, 0, len(output.Items))
+	if err = dynamodbattribute.UnmarshalListOfMaps(output.Items, &snapshots); err != nil {
+		return nil, err
+	}
+
+	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetSnapshot(id string) (*gocqrs.Snapshot, error) {
+func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error) {
 	output, err := d.db.GetItem(&dynamodb.GetItemInput{
 		TableName: seventsnapshot,
 		Key: map[string]*dynamodb.AttributeValue{
-			xid: &dynamodb.AttributeValue{S: aws.String(id)},
+			xid: &dynamodb.AttributeValue{S: &aggID},
 		},
 	})
 	if err != nil {
@@ -272,43 +358,6 @@ func (d *DynamoDBEventStore) GetSnapshot(id string) (*gocqrs.Snapshot, error) {
 	}
 
 	return snapshot, nil
-}
-
-func (d *DynamoDBEventStore) GetSnapshotsByAggregateType(aggType gocqrs.AggregateType, limit int, nextToken string) ([]*gocqrs.Snapshot, string, error) {
-	var newNextToken string
-	keyCon := aws.String("b=:agg")
-
-	exValue := map[string]*dynamodb.AttributeValue{
-		":agg": &dynamodb.AttributeValue{S: aws.String(string(aggType))},
-	}
-
-	if nextToken != "" {
-		keyCon = aws.String("b=:agg and id>:nextToken")
-		exValue[":nextToken"] = &dynamodb.AttributeValue{S: aws.String(nextToken)}
-	}
-
-	output, err := d.db.Query(&dynamodb.QueryInput{
-		TableName:                 seventsnapshot,
-		IndexName:                 bIDIndex,
-		Limit:                     aws.Int64(int64(limit)),
-		KeyConditionExpression:    keyCon,
-		ExpressionAttributeValues: exValue,
-	})
-
-	if len(output.Items) == 0 {
-		return nil, "", nil
-	}
-
-	snapshots := make([]*gocqrs.Snapshot, 0, len(output.Items))
-	if err = dynamodbattribute.UnmarshalListOfMaps(output.Items, &snapshots); err != nil {
-		return nil, newNextToken, err
-	}
-
-	if len(output.LastEvaluatedKey) > 0 {
-		newNextToken = *output.LastEvaluatedKey["id"].S
-	}
-
-	return snapshots, newNextToken, nil
 }
 
 func (d *DynamoDBEventStore) BeginTx(fn func(ctx context.Context) error) error {
@@ -328,12 +377,8 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 
 	putES = append(putES, &dynamodb.TransactWriteItem{
 		Put: &dynamodb.Put{
-			TableName:           seventsnapshot,
-			ConditionExpression: aws.String("attribute_not_exists(id) or v<:v"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{N: aws.String(strconv.Itoa(snapshot.Version))},
-			},
-			Item: snapshotReq,
+			TableName: seventsnapshot,
+			Item:      snapshotReq,
 		},
 	})
 
@@ -345,12 +390,9 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 
 		putES = append(putES, &dynamodb.TransactWriteItem{
 			Put: &dynamodb.Put{
-				TableName: seventstore,
-				// ConditionExpression: aws.String("v <> :v"),
-				// ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				// 	":v": &dynamodb.AttributeValue{N: aws.String(strconv.Itoa(payloads[i].Version))},
-				// },
-				Item: payloadReq,
+				TableName:           seventstore,
+				ConditionExpression: saveCond,
+				Item:                payloadReq,
 			},
 		})
 	}
@@ -359,5 +401,14 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 		TransactItems: putES,
 	})
 
-	return err
+	if err != nil {
+		aerr := err.(awserr.Error)
+		if aerr.Code() == dynamodb.ErrCodeTransactionCanceledException {
+			return gocqrs.ErrVersionInconsistency
+		}
+
+		return err
+	}
+
+	return nil
 }

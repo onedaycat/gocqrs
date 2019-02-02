@@ -6,10 +6,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEID(t *testing.T) {
-	eid := New("bh9vq3krtr34lt1oedc0", 99)
-	newEid, err := FromString(eid.String())
+func TestGenerateEID(t *testing.T) {
+	id := CreateEID("bh9vq3krtr34lt1oedc0", 99)
+	require.Len(t, id, 22)
+}
 
-	require.NoError(t, err)
-	require.Equal(t, eid, newEid)
+func TestGenerateAggregateID(t *testing.T) {
+	FreezeAggregateID("1")
+	id := GenerateAggregateID()
+	require.Equal(t, "1", id)
+
+	UnFreezeAggregateID()
+	id = GenerateAggregateID()
+	require.Len(t, id, 20)
 }

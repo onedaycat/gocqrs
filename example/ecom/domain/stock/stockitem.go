@@ -10,18 +10,18 @@ type StockItem struct {
 	Qty       Qty
 }
 
-func NewStockItem(productID string) *StockItem {
-	st := &StockItem{
-		AggregateBase: gocqrs.InitAggregate(productID),
-		ProductID:     productID,
+func NewStockItem() *StockItem {
+	return &StockItem{
+		AggregateBase: gocqrs.InitAggregate(),
 	}
+}
 
+func (st *StockItem) Create(productID string, qty Qty) {
+	st.Qty = qty
 	st.Publish(&StockItemCreated{
-		ProductID: productID,
-		Qty:       0,
+		ProductID: st.GetAggregateID(),
+		Qty:       st.Qty,
 	})
-
-	return st
 }
 
 func (st *StockItem) GetAggregateType() gocqrs.AggregateType {

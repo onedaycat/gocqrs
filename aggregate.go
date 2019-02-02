@@ -1,6 +1,10 @@
 package gocqrs
 
-type AggregateType string
+import (
+	"github.com/onedaycat/gocqrs/internal/eid"
+)
+
+type AggregateType = string
 
 type AggregateRoot interface {
 	Apply(payload *EventMessage) error
@@ -25,7 +29,16 @@ type AggregateBase struct {
 	version int
 }
 
-func InitAggregate(id string) *AggregateBase {
+// InitAggregate if id is empty, id will be generated
+func InitAggregate() *AggregateBase {
+	return &AggregateBase{
+		id:      eid.GenerateAggregateID(),
+		events:  make([]Event, 0, 1),
+		version: 0,
+	}
+}
+
+func InitAggregateWithID(id string) *AggregateBase {
 	return &AggregateBase{
 		id:      id,
 		events:  make([]Event, 0, 1),

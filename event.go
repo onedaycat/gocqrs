@@ -1,6 +1,6 @@
 package gocqrs
 
-type EventType string
+type EventType = string
 
 type EventMessage struct {
 	ID            string        `json:"id" bson:"_id"`
@@ -10,6 +10,7 @@ type EventMessage struct {
 	Version       int           `json:"v" bson:"v"`
 	Payload       *Payload      `json:"p" bson:"p"`
 	Time          int64         `json:"t" bson:"t"`
+	Seq           string        `json:"s" bson:"s"`
 }
 
 type Event interface {

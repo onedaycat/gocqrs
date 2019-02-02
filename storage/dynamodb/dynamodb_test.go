@@ -1,152 +1,147 @@
 package dynamodb
 
-// import (
-// 	"sync"
-// 	"testing"
+import (
+	"sync"
+	"testing"
+	"time"
 
-// 	"github.com/aws/aws-sdk-go/aws"
-// 	"github.com/aws/aws-sdk-go/aws/credentials"
-// 	"github.com/aws/aws-sdk-go/aws/session"
-// 	"github.com/onedaycat/gocqrs"
-// 	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
-// 	"github.com/stretchr/testify/require"
-// )
+	"github.com/onedaycat/gocqrs/internal/clock"
 
-// // func TestGet(t *testing.T) {
-// // 	sess, err := session.NewSession(&aws.Config{
-// // 		Credentials: credentials.NewEnvCredentials(),
-// // 		Region:      aws.String("ap-southeast-1"),
-// // 	})
-// // 	require.NoError(t, err)
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/onedaycat/gocqrs"
+	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
+	"github.com/stretchr/testify/require"
+)
 
-// // 	db := NewDynamoDBEventStore(sess)
+var _db *DynamoDBEventStore
 
-// // 	err = db.CreateSchema(true)
-// // 	require.NoError(t, err)
+func getDB() *DynamoDBEventStore {
+	if _db == nil {
+		sess, err := session.NewSession(&aws.Config{
+			Credentials: credentials.NewEnvCredentials(),
+			Region:      aws.String("ap-southeast-1"),
+		})
+		if err != nil {
+			panic(err)
+		}
 
-// // 	db.TruncateTables()
-// // 	st := stock.NewStockItem("1")
-// // 	st.Add(10)
-// // 	st.Sub(5)
-// // 	st.Add(2)
-// // 	st.Add(3)
+		_db = NewDynamoDBEventStore(sess)
+		err = _db.CreateSchema(true)
+		if err != nil {
+			panic(err)
+		}
+	}
 
-// // 	es := gocqrs.NewEventStore(db, nil)
+	return _db
+}
 
-// // 	err = es.Save(st)
-// // 	require.NoError(t, err)
+func TestSaveAndGet(t *testing.T) {
+	db := getDB()
+	db.TruncateTables()
 
-// // 	st2 := stock.NewStockItem("1")
-// // 	err = es.GetSnapshot(st2)
-// // 	require.NoError(t, err)
-// // 	require.Equal(t, "1", st2.ProductID)
-// // 	require.Equal(t, stock.Qty(10), st2.Qty)
+	es := gocqrs.NewEventStore(db, nil)
 
-// // 	st2.Remove()
-// // 	err = es.Save(st2)
-// // 	require.NoError(t, err)
-// // 	err = es.GetSnapshot(st2)
-// // 	require.NoError(t, err)
-// // 	require.True(t, st2.IsRemovedAggregate())
-// // }
+	now1 := time.Now().UTC().Add(time.Second * -10)
+	now2 := time.Now().UTC().Add(time.Second * -5)
 
-// // func TestGetSnapshotsByAggregateType(t *testing.T) {
-// // 	sess, err := session.NewSession(&aws.Config{
-// // 		Credentials: credentials.NewEnvCredentials(),
-// // 		Region:      aws.String("ap-southeast-1"),
-// // 	})
-// // 	require.NoError(t, err)
+	st := stock.NewStockItem()
+	st.Create("1", 0)
+	st.Add(10)
+	st.Sub(5)
+	st.Add(2)
+	st.Add(3)
 
-// // 	db := NewDynamoDBEventStore(sess)
+	clock.Freeze(now1)
+	err := es.Save(st)
+	require.NoError(t, err)
 
-// // 	err = db.CreateSchema(true)
-// // 	require.NoError(t, err)
+	// Get
+	st2 := stock.NewStockItem()
+	err = es.Get(st.GetAggregateID(), st2)
+	require.NoError(t, err)
+	require.Equal(t, st, st2)
 
-// // 	db.TruncateTables()
-// // 	es := gocqrs.NewEventStore(db, nil)
+	// Get By Time
+	st.Add(2)
+	st.Remove()
 
-// // 	st1 := stock.NewStockItem("1")
-// // 	st2 := stock.NewStockItem("2")
-// // 	st3 := stock.NewStockItem("3")
+	clock.Freeze(now2)
+	err = es.Save(st)
+	require.NoError(t, err)
 
-// // 	es.Save(st1)
-// // 	es.Save(st2)
-// // 	es.Save(st3)
+	st3 := stock.NewStockItem()
+	events, err := es.GetByTime(st.GetAggregateID(), now2.Unix(), st3)
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+	require.True(t, st.IsRemoved())
+	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, 6, events[0].Version)
+	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
+	require.Equal(t, 7, events[1].Version)
 
-// // 	sts, nextToken, err := es.GetSnapshotsByAggregateType("domain.subdomain.aggregate", 2, "")
-// // 	require.NoError(t, err)
-// // 	require.Len(t, sts, 2)
-// // 	require.Equal(t, "1", sts[0].ID)
-// // 	require.Equal(t, "2", sts[1].ID)
-// // 	require.Equal(t, "2", nextToken)
+	// GetSnapshot
+	st4 := stock.NewStockItem()
+	err = es.GetSnapshot(st.GetAggregateID(), st4)
+	require.NoError(t, err)
+	require.Equal(t, st4, st)
 
-// // 	sts, nextToken, err = es.GetSnapshotsByAggregateType("domain.subdomain.aggregate", 2, nextToken)
-// // 	require.NoError(t, err)
-// // 	require.Len(t, sts, 1)
-// // 	require.Equal(t, "3", sts[0].ID)
-// // 	require.Equal(t, "", nextToken)
+	// GetByEventType
+	events, err = es.GetByEventType(stock.StockItemUpdatedEvent, now2.Unix())
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, 6, events[0].Version)
 
-// // 	sts, nextToken, err = es.GetSnapshotsByAggregateType("notfound", 2, "")
-// // 	require.NoError(t, err)
-// // 	require.Nil(t, sts)
-// // 	require.Equal(t, "", nextToken)
-// // }
+	// GetByAggregateType
+	events, err = es.GetByAggregateType(st.GetAggregateType(), now2.Unix())
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+	require.True(t, st.IsRemoved())
+	require.Equal(t, stock.StockItemUpdatedEvent, events[0].Type)
+	require.Equal(t, 6, events[0].Version)
+	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
+	require.Equal(t, 7, events[1].Version)
+}
 
-// func TestGetSnapshot(t *testing.T) {
-// 	sess, err := session.NewSession(&aws.Config{
-// 		Credentials: credentials.NewEnvCredentials(),
-// 		Region:      aws.String("ap-southeast-1"),
-// 	})
-// 	require.NoError(t, err)
+func TestConcurency(t *testing.T) {
+	db := getDB()
 
-// 	db := NewDynamoDBEventStore(sess)
+	db.TruncateTables()
+	es := gocqrs.NewEventStore(db, nil)
 
-// 	err = db.CreateSchema(true)
-// 	require.NoError(t, err)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
 
-// 	db.TruncateTables()
-// 	es := gocqrs.NewEventStore(db, nil)
+	var err1 error
+	var err2 error
+	go func() {
+		st := stock.NewStockItem()
+		st.SetAggregateID("a1")
+		st.Create("1", 0)
+		st.Add(10)
+		st.Sub(5)
+		st.Add(2)
+		st.Add(3)
 
-// 	wg := sync.WaitGroup{}
-// 	wg.Add(1)
+		err1 = es.Save(st)
 
-// 	go func() {
-// 		st := stock.NewStockItem("1")
-// 		st.Add(10)
-// 		st.Sub(5)
-// 		st.Add(2)
-// 		st.Add(3)
+		wg.Done()
+	}()
 
-// 		if err := es.Save(st); err != nil {
-// 			panic(err)
-// 		}
+	go func() {
+		st := stock.NewStockItem()
+		st.SetAggregateID("a1")
+		st.Create("1", 0)
+		st.Remove()
 
-// 		wg.Done()
-// 	}()
+		err2 = es.Save(st)
 
-// 	// go func() {
-// 	// 	st := stock.NewStockItem("1")
-// 	// 	st.Remove()
+		wg.Done()
+	}()
 
-// 	// 	if err := es.Save(st); err != nil {
-// 	// 		panic(err)
-// 	// 	}
-
-// 	// 	wg.Done()
-// 	// }()
-
-// 	wg.Wait()
-
-// 	require.NoError(t, err)
-
-// 	// st.Remove()
-// 	// st.SetVersion(1)
-// 	// err = es.Save(st)
-// 	// require.NoError(t, err)
-
-// 	// expSt := stock.NewStockItem("1")
-
-// 	// err = es.GetSnapshot("1", expSt)
-// 	// require.NoError(t, err)
-// 	// require.Equal(t, expSt, st)
-// }
+	wg.Wait()
+	require.Equal(t, gocqrs.ErrVersionInconsistency, err1)
+	require.Nil(t, err2)
+}

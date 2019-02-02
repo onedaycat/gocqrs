@@ -2,6 +2,7 @@ package gocqrs
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/onedaycat/gocqrs/internal/clock"
@@ -10,15 +11,18 @@ import (
 
 // RetryHandler if return bool is true is allow retry,
 // if return bool is false no retry
-type RetryHandler func() (error, bool)
+type RetryHandler func() error
+
+type SubscribeHandler func(events []*EventMessage)
 
 type EventStore interface {
-	Get(id string, agg AggregateRoot) error
-	GetByTime(id string, time int64, agg AggregateRoot) ([]*EventMessage, error)
+	Get(aggID string, agg AggregateRoot) error
+	GetByTime(aggID string, time int64, agg AggregateRoot) ([]*EventMessage, error)
 	GetByEventType(eventType EventType, time int64) ([]*EventMessage, error)
 	GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error)
-	GetSnapshot(id string, agg AggregateRoot) error
+	GetSnapshot(aggID string, agg AggregateRoot) error
 	Save(agg AggregateRoot) error
+	// Subscribe(fn SubscribeHandler)
 }
 
 type eventStore struct {
@@ -35,6 +39,17 @@ func (es *eventStore) Get(id string, agg AggregateRoot) error {
 	if err != nil {
 		return err
 	}
+
+	n := len(events)
+
+	if n == 0 {
+		return ErrNotFound
+	}
+
+	event := events[n-1]
+
+	agg.SetAggregateID(event.AggregateID)
+	agg.SetVersion(event.Version)
 
 	for _, event := range events {
 		if err = agg.Apply(event); err != nil {
@@ -65,6 +80,9 @@ func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
 
 	agg.SetAggregateID(snapshot.ID)
 	agg.SetVersion(snapshot.Version)
+	if snapshot.IsRemoved {
+		agg.MarkAsRemoved()
+	}
 
 	if err = snapshot.Payload.UnmarshalPayload(agg); err != nil {
 		return err
@@ -86,14 +104,18 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 
 	for i := 0; i < len(events); i++ {
 		agg.IncreaseVersion()
+		aggid := agg.GetAggregateID()
+		version := agg.GetVersion()
+		id := eid.CreateEID(aggid, version)
 		payloads[i] = &EventMessage{
-			ID:            eid.New(agg.GetAggregateID(), agg.GetVersion()).String(),
-			AggregateID:   agg.GetAggregateID(),
+			ID:            id,
+			AggregateID:   aggid,
 			AggregateType: aggType,
-			Version:       agg.GetVersion(),
+			Version:       version,
 			Type:          events[i].GetEventType(),
 			Payload:       NewPayload(events[i]),
 			Time:          now,
+			Seq:           strconv.FormatInt((now*10000)+int64(version), 10),
 		}
 
 		if len(events)-1 == i {
@@ -126,25 +148,37 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 			return err
 		}
 
+		if es.eventBus != nil {
+			if err := es.eventBus.Publish(payloads); err != nil {
+				return err
+			}
+		}
+
 		agg.ClearEvents()
 
 		return nil
 	})
 }
 
-func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) {
+func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {
 	var err error
-	var isRetry bool
 	currentRetry := 0
 	for currentRetry < numberRetry {
-		if err, isRetry = fn(); err == nil || !isRetry {
-			return
+		if err = fn(); err != nil {
+			if err == ErrVersionInconsistency {
+				if delay > 0 {
+					time.Sleep(delay)
+				}
+
+				currentRetry++
+				continue
+			}
+
+			return err
 		}
 
-		if delay > 0 {
-			time.Sleep(delay)
-		}
-
-		currentRetry++
+		return nil
 	}
+
+	return nil
 }

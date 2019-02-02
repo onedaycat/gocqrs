@@ -1,13 +1,10 @@
-package local
+package fake
 
 import (
-	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/onedaycat/gocqrs"
 )
 
-type FakeEventBus struct {
-	kin *kinesis.Kinesis
-}
+type FakeEventBus struct{}
 
 func FakecalEventBus() *FakeEventBus {
 	return &FakeEventBus{}
