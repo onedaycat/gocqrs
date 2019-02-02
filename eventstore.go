@@ -27,14 +27,19 @@ type EventStore interface {
 type eventStore struct {
 	storage  Storage
 	eventBus EventBus
+	limit    int64
 }
 
 func NewEventStore(storage Storage, eventBus EventBus) EventStore {
-	return &eventStore{storage, eventBus}
+	return &eventStore{storage, eventBus, 100}
+}
+
+func (es *eventStore) SetEventLimit(limit int64) {
+	es.limit = limit
 }
 
 func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) error {
-	events, err := es.storage.Get(id, seq)
+	events, err := es.storage.Get(id, seq, es.limit)
 	if err != nil {
 		return err
 	}
@@ -73,15 +78,15 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 }
 
 func (es *eventStore) Get(id string, seq int64, agg AggregateRoot) ([]*EventMessage, error) {
-	return es.storage.Get(id, seq)
+	return es.storage.Get(id, seq, es.limit)
 }
 
 func (es *eventStore) GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error) {
-	return es.storage.GetByEventType(eventType, seq)
+	return es.storage.GetByEventType(eventType, seq, es.limit)
 }
 
 func (es *eventStore) GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error) {
-	return es.storage.GetByAggregateType(aggType, seq)
+	return es.storage.GetByAggregateType(aggType, seq, es.limit)
 }
 
 func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {

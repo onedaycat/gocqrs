@@ -31,7 +31,6 @@ var (
 	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :s")
 	getByAggregateTypeCond         = aws.String("b=:b")
 	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :s")
-	limit                          = aws.Int64(100)
 )
 
 type DynamoDBEventStore struct {
@@ -214,7 +213,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 	return nil
 }
 
-func (d *DynamoDBEventStore) Get(aggID string, seq int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) Get(aggID string, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getKV: &dynamodb.AttributeValue{S: &aggID},
@@ -228,7 +227,7 @@ func (d *DynamoDBEventStore) Get(aggID string, seq int64) ([]*gocqrs.EventMessag
 	output, err := d.db.Query(&dynamodb.QueryInput{
 		TableName:                 &d.eventstoreTable,
 		KeyConditionExpression:    keyCond,
-		Limit:                     limit,
+		Limit:                     &limit,
 		ExpressionAttributeValues: exValue,
 	})
 
@@ -248,7 +247,7 @@ func (d *DynamoDBEventStore) Get(aggID string, seq int64) ([]*gocqrs.EventMessag
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByEventTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByEventTypeKV: &dynamodb.AttributeValue{S: &eventType},
@@ -262,7 +261,7 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq int6
 	output, err := d.db.Query(&dynamodb.QueryInput{
 		TableName:                 &d.eventstoreTable,
 		IndexName:                 eSIndex,
-		Limit:                     limit,
+		Limit:                     &limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
 	})
@@ -283,7 +282,7 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq int6
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, seq int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByAggregateTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByAggregateTypeKV: &dynamodb.AttributeValue{S: &aggType},
@@ -297,7 +296,7 @@ func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, se
 	output, err := d.db.Query(&dynamodb.QueryInput{
 		TableName:                 &d.eventstoreTable,
 		IndexName:                 bSIndex,
-		Limit:                     limit,
+		Limit:                     &limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
 	})
