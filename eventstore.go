@@ -16,6 +16,7 @@ type SubscribeHandler func(events []*EventMessage)
 
 //go:generate mockery -name=EventStore
 type EventStore interface {
+	SetEventLimit(limit int64)
 	Get(aggID string, seq int64, agg AggregateRoot) ([]*EventMessage, error)
 	GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error)
 	GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error)
@@ -28,14 +29,16 @@ type eventStore struct {
 	storage  Storage
 	eventBus EventBus
 	limit    int64
+	limitInt int
 }
 
 func NewEventStore(storage Storage, eventBus EventBus) EventStore {
-	return &eventStore{storage, eventBus, 100}
+	return &eventStore{storage, eventBus, 100, 100}
 }
 
 func (es *eventStore) SetEventLimit(limit int64) {
 	es.limit = limit
+	es.limitInt = int(limit)
 }
 
 func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) error {
@@ -61,7 +64,7 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 		}
 	}
 
-	for n >= 100 {
+	for n >= es.limitInt {
 		if err = es.GetAggregate(id, agg, event.Seq); err != nil {
 			if err == ErrNotFound {
 				break
@@ -136,7 +139,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 			Type:          events[i].GetEventType(),
 			Payload:       NewPayload(events[i]),
 			Time:          now,
-			Seq:           WithSeq(now, int64(version)),
+			Seq:           NewSeq(now, int64(version)),
 		}
 
 		if len(events)-1 == i {
@@ -198,7 +201,7 @@ func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {
 	return nil
 }
 
-func WithSeq(time int64, version int64) int64 {
+func NewSeq(time int64, version int64) int64 {
 	if time < 0 {
 		return 0
 	}
