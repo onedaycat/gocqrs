@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	eventsnapshot        = "eventsnapshot"
-	eventstore           = "eventstore"
 	xid                  = "id"
 	emptyStr             = ""
 	timeKV               = ":t"
@@ -24,11 +22,8 @@ const (
 )
 
 var (
-	bIDIndex                       = aws.String("b-id-index")
 	eSIndex                        = aws.String("e-s-index")
 	bSIndex                        = aws.String("b-s-index")
-	seventsnapshot                 = aws.String(eventsnapshot)
-	seventstore                    = aws.String(eventstore)
 	saveCond                       = aws.String("attribute_not_exists(s)")
 	getCond                        = aws.String("a=:a")
 	getCondWithTime                = aws.String("a=:a and s > :t")
@@ -36,21 +31,26 @@ var (
 	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :t")
 	getByAggregateTypeCond         = aws.String("b=:b")
 	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :t")
+	limit                          = aws.Int64(100)
 )
 
 type DynamoDBEventStore struct {
-	db *dynamodb.DynamoDB
+	db              *dynamodb.DynamoDB
+	eventstoreTable string
+	snapshotTable   string
 }
 
-func NewDynamoDBEventStore(sess *session.Session) *DynamoDBEventStore {
+func New(sess *session.Session, eventstoreTable, snapshotTable string) *DynamoDBEventStore {
 	return &DynamoDBEventStore{
-		db: dynamodb.New(sess),
+		db:              dynamodb.New(sess),
+		eventstoreTable: eventstoreTable,
+		snapshotTable:   snapshotTable,
 	}
 }
 
 func (d *DynamoDBEventStore) TruncateTables() {
 	output, err := d.db.Scan(&dynamodb.ScanInput{
-		TableName: aws.String(eventstore),
+		TableName: &d.eventstoreTable,
 	})
 	if err != nil {
 		panic(err)
@@ -72,7 +72,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 	}
 	_, err = d.db.BatchWriteItem(&dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]*dynamodb.WriteRequest{
-			eventstore: keyStores,
+			d.eventstoreTable: keyStores,
 		},
 	})
 	if err != nil {
@@ -80,7 +80,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 	}
 
 	output, err = d.db.Scan(&dynamodb.ScanInput{
-		TableName: aws.String(eventsnapshot),
+		TableName: &d.snapshotTable,
 	})
 	if err != nil {
 		panic(err)
@@ -100,7 +100,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 	}
 	_, err = d.db.BatchWriteItem(&dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]*dynamodb.WriteRequest{
-			eventsnapshot: keyStores,
+			d.snapshotTable: keyStores,
 		},
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 			StreamEnabled:  aws.Bool(enableStream),
 			StreamViewType: aws.String("NEW_IMAGE"),
 		},
-		TableName: seventstore,
+		TableName: &d.eventstoreTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
 				AttributeName: aws.String("a"),
@@ -189,7 +189,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 
 	_, err = d.db.CreateTable(&dynamodb.CreateTableInput{
 		BillingMode: aws.String("PAY_PER_REQUEST"),
-		TableName:   seventsnapshot,
+		TableName:   &d.snapshotTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
 				AttributeName: aws.String("id"),
@@ -204,24 +204,6 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 			{
 				AttributeName: aws.String("id"),
 				KeyType:       aws.String("HASH"),
-			},
-		},
-		GlobalSecondaryIndexes: []*dynamodb.GlobalSecondaryIndex{
-			{
-				IndexName: aws.String("b-id-index"),
-				Projection: &dynamodb.Projection{
-					ProjectionType: aws.String("ALL"),
-				},
-				KeySchema: []*dynamodb.KeySchemaElement{
-					{
-						AttributeName: aws.String("b"),
-						KeyType:       aws.String("HASH"),
-					},
-					{
-						AttributeName: aws.String("id"),
-						KeyType:       aws.String("RANGE"),
-					},
-				},
 			},
 		},
 	})
@@ -248,7 +230,7 @@ func (d *DynamoDBEventStore) Get(aggID string, time int64) ([]*gocqrs.EventMessa
 	}
 
 	output, err := d.db.Query(&dynamodb.QueryInput{
-		TableName:                 seventstore,
+		TableName:                 &d.eventstoreTable,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
 	})
@@ -281,8 +263,9 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, time int
 	}
 
 	output, err := d.db.Query(&dynamodb.QueryInput{
-		TableName:                 seventstore,
+		TableName:                 &d.eventstoreTable,
 		IndexName:                 eSIndex,
+		Limit:                     limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
 	})
@@ -315,8 +298,9 @@ func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, ti
 	}
 
 	output, err := d.db.Query(&dynamodb.QueryInput{
-		TableName:                 seventstore,
+		TableName:                 &d.eventstoreTable,
 		IndexName:                 bSIndex,
+		Limit:                     limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
 	})
@@ -339,7 +323,7 @@ func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, ti
 
 func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error) {
 	output, err := d.db.GetItem(&dynamodb.GetItemInput{
-		TableName: seventsnapshot,
+		TableName: &d.snapshotTable,
 		Key: map[string]*dynamodb.AttributeValue{
 			xid: &dynamodb.AttributeValue{S: &aggID},
 		},
@@ -377,7 +361,7 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 
 	putES = append(putES, &dynamodb.TransactWriteItem{
 		Put: &dynamodb.Put{
-			TableName: seventsnapshot,
+			TableName: &d.snapshotTable,
 			Item:      snapshotReq,
 		},
 	})
@@ -390,7 +374,7 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 
 		putES = append(putES, &dynamodb.TransactWriteItem{
 			Put: &dynamodb.Put{
-				TableName:           seventstore,
+				TableName:           &d.eventstoreTable,
 				ConditionExpression: saveCond,
 				Item:                payloadReq,
 			},

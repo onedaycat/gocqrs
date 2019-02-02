@@ -97,6 +97,10 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		return nil
 	}
 
+	if len(events) > 9 {
+		return ErrEventLimitExceed
+	}
+
 	payloads := make([]*EventMessage, len(events))
 	now := clock.Now().Unix()
 	aggType := agg.GetAggregateType()
@@ -130,6 +134,10 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		Payload:       NewPayload(agg),
 		LastEvent:     lastEvent,
 		IsRemoved:     agg.IsRemoved(),
+	}
+
+	if snapshot.Version == 0 {
+		return ErrZeroVersionNotAllowed
 	}
 
 	return es.storage.BeginTx(func(ctx context.Context) error {

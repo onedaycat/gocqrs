@@ -26,7 +26,7 @@ func getDB() *DynamoDBEventStore {
 			panic(err)
 		}
 
-		_db = NewDynamoDBEventStore(sess)
+		_db = New(sess, "eventstore", "eventsnapshot")
 		err = _db.CreateSchema(true)
 		if err != nil {
 			panic(err)
@@ -127,14 +127,14 @@ func TestNotFound(t *testing.T) {
 	require.Nil(t, events)
 
 	// GetByEventType
-	events, err = es.GetByEventType(stock.StockItemUpdatedEvent, 0)
+	events, err = es.GetByEventType("xxxx", 0)
 	require.Nil(t, err)
 	require.Nil(t, events)
 
 	// GetByAggregateType
-	events, err = es.GetByAggregateType(st.GetAggregateType(), 0)
-	require.Nil(t, err)
+	events, err = es.GetByAggregateType("xxxx", 0)
 	require.Nil(t, events)
+	require.Nil(t, err)
 }
 
 func TestConcurency(t *testing.T) {
