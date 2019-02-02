@@ -32,7 +32,7 @@ const eventInsert = "INSERT"
 
 type Records = []*Record
 
-type DynamoDBPayload struct {
+type DynamoDBStreamEvent struct {
 	Records Records `json:"Records"`
 }
 

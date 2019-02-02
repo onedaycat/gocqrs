@@ -1,4 +1,4 @@
-package dynamostream
+package kinesisstream
 
 import (
 	"context"
@@ -9,26 +9,26 @@ import (
 type OnApplyEventMessageHandler func(msg *gocqrs.EventMessage) error
 type OnErrorHandler func(msg *gocqrs.EventMessage, err error)
 
-type DyanmoStream struct {
+type KinesisStream struct {
 	onError             OnErrorHandler
 	onApplyEventMessage OnApplyEventMessageHandler
 }
 
-func New() *DyanmoStream {
-	return &DyanmoStream{
+func New() *KinesisStream {
+	return &KinesisStream{
 		onError: func(msg *gocqrs.EventMessage, err error) {},
 	}
 }
 
-func (s *DyanmoStream) OnError(fn OnErrorHandler) {
+func (s *KinesisStream) OnError(fn OnErrorHandler) {
 	s.onError = fn
 }
 
-func (s *DyanmoStream) OnApplyEventMessage(fn OnApplyEventMessageHandler) {
+func (s *KinesisStream) OnApplyEventMessage(fn OnApplyEventMessageHandler) {
 	s.onApplyEventMessage = fn
 }
 
-func (s *DyanmoStream) Run(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
+func (s *KinesisStream) Run(ctx context.Context, event *KinesisStreamEvent) (interface{}, error) {
 	if s.onApplyEventMessage == nil {
 		return nil, nil
 	}
@@ -36,12 +36,8 @@ func (s *DyanmoStream) Run(ctx context.Context, event *DynamoDBStreamEvent) (int
 	var err error
 	var msg *gocqrs.EventMessage
 	for _, record := range event.Records {
-		if eventInsert != record.EventName {
-			continue
-		}
-
-		msg = record.DynamoDB.Payload.EventMessage
-		if err = s.onApplyEventMessage(record.DynamoDB.Payload.EventMessage); err != nil {
+		msg = record.Kinesis.Payload.EventMessage
+		if err = s.onApplyEventMessage(record.Kinesis.Payload.EventMessage); err != nil {
 			s.onError(msg, err)
 		}
 	}

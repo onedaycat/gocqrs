@@ -2,13 +2,12 @@ package dynamostream
 
 import (
 	"encoding/json"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseDynamoDBPayload(t *testing.T) {
+func TestParseDynamoDBStreamEvent(t *testing.T) {
 	payload := []byte(`
 	{
 		"Records": [
@@ -42,7 +41,7 @@ func TestParseDynamoDBPayload(t *testing.T) {
 							"S": "domain.aggregate.event"
 						},
 						"s": {
-							"S": "10001"
+							"N": "10001"
 						},
 						"p": {
 							"M": {
@@ -66,54 +65,15 @@ func TestParseDynamoDBPayload(t *testing.T) {
 		ID string `json:"id"`
 	}
 
-	p := &DynamoDBPayload{}
-	err := json.Unmarshal(payload, p)
+	event := &DynamoDBStreamEvent{}
+	err := json.Unmarshal(payload, event)
 	require.NoError(t, err)
-	require.Len(t, p.Records, 1)
-	require.Equal(t, eventInsert, p.Records[0].EventName)
-	require.Equal(t, "domain.aggregate", p.Records[0].DynamoDB.Payload.EventMessage.AggregateType)
+	require.Len(t, event.Records, 1)
+	require.Equal(t, eventInsert, event.Records[0].EventName)
+	require.Equal(t, "domain.aggregate", event.Records[0].DynamoDB.Payload.EventMessage.AggregateType)
 
 	pp := &pdata{}
-	err = p.Records[0].DynamoDB.Payload.EventMessage.Payload.UnmarshalPayload(pp)
+	err = event.Records[0].DynamoDB.Payload.EventMessage.Payload.UnmarshalPayload(pp)
 	require.NoError(t, err)
 	require.Equal(t, &pdata{"1"}, pp)
-}
-
-func BenchmarkA(b *testing.B) {
-	data := make(map[string]interface{})
-	for i := 0; i < 10; i++ {
-		data[strconv.Itoa(i)] = 10
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		d := data["1"]
-		_ = d
-	}
-}
-
-func BenchmarkB(b *testing.B) {
-	data := "1"
-	x := "1"
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		switch data {
-		case "0":
-		case "1":
-			d := x
-			_ = d
-		case "2":
-		case "3":
-		case "4":
-		case "5":
-		case "6":
-		case "7":
-		case "8":
-		case "9":
-		case "10":
-		}
-	}
 }
