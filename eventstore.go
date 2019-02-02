@@ -15,6 +15,7 @@ type RetryHandler func() error
 
 type SubscribeHandler func(events []*EventMessage)
 
+//go:generate mockery -name=EventStore
 type EventStore interface {
 	Get(aggID string, agg AggregateRoot) error
 	GetByTime(aggID string, time int64, agg AggregateRoot) ([]*EventMessage, error)
@@ -22,7 +23,6 @@ type EventStore interface {
 	GetByAggregateType(aggType AggregateType, time int64) ([]*EventMessage, error)
 	GetSnapshot(aggID string, agg AggregateRoot) error
 	Save(agg AggregateRoot) error
-	// Subscribe(fn SubscribeHandler)
 }
 
 type eventStore struct {

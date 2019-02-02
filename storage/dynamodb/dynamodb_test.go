@@ -5,13 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onedaycat/gocqrs/internal/clock"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
 	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
+	"github.com/onedaycat/gocqrs/internal/clock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,6 +102,39 @@ func TestSaveAndGet(t *testing.T) {
 	require.Equal(t, 6, events[0].Version)
 	require.Equal(t, stock.StockItemRemovedEvent, events[1].Type)
 	require.Equal(t, 7, events[1].Version)
+}
+
+func TestNotFound(t *testing.T) {
+	db := getDB()
+
+	es := gocqrs.NewEventStore(db, nil)
+
+	// Get
+	st := stock.NewStockItem()
+	err := es.Get(st.GetAggregateID(), st)
+	require.Equal(t, gocqrs.ErrNotFound, err)
+
+	// Get By Time
+	st3 := stock.NewStockItem()
+	events, err := es.GetByTime(st.GetAggregateID(), 0, st3)
+	require.Nil(t, err)
+	require.Nil(t, events)
+
+	// GetSnapshot
+	st4 := stock.NewStockItem()
+	err = es.GetSnapshot(st.GetAggregateID(), st4)
+	require.Equal(t, gocqrs.ErrNotFound, err)
+	require.Nil(t, events)
+
+	// GetByEventType
+	events, err = es.GetByEventType(stock.StockItemUpdatedEvent, 0)
+	require.Nil(t, err)
+	require.Nil(t, events)
+
+	// GetByAggregateType
+	events, err = es.GetByAggregateType(st.GetAggregateType(), 0)
+	require.Nil(t, err)
+	require.Nil(t, events)
 }
 
 func TestConcurency(t *testing.T) {

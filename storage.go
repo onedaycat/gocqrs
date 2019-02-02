@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+//go:generate mockery -name=Storage
 // Get(id string, withSnapshot bool)
 type Storage interface {
 	Get(aggID string, time int64) ([]*EventMessage, error)
