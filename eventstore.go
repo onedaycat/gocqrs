@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/onedaycat/gocqrs/internal/clock"
-	"github.com/onedaycat/gocqrs/internal/eid"
+	"github.com/onedaycat/gocqrs/common/clock"
+	"github.com/onedaycat/gocqrs/common/eid"
 )
 
 // RetryHandler if return bool is true is allow retry,

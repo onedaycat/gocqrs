@@ -1,7 +1,7 @@
 package gocqrs
 
 import (
-	"github.com/onedaycat/gocqrs/internal/eid"
+	"github.com/onedaycat/gocqrs/common/eid"
 )
 
 type AggregateType = string

@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
+	"github.com/onedaycat/gocqrs/common/clock"
 	"github.com/onedaycat/gocqrs/example/ecom/stock/domain"
-	"github.com/onedaycat/gocqrs/internal/clock"
 	"github.com/stretchr/testify/require"
 )
 

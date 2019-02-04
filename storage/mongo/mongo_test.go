@@ -10,7 +10,7 @@ package mongo
 // 	"github.com/mongodb/mongo-go-driver/mongo"
 // 	"github.com/onedaycat/gocqrs"
 // 	"github.com/onedaycat/gocqrs/example/ecom/domain/stock"
-// 	"github.com/onedaycat/gocqrs/internal/clock"
+// 	"github.com/onedaycat/gocqrs/common/clock"
 // 	"github.com/stretchr/testify/require"
 // )
 
