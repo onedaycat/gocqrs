@@ -114,6 +114,7 @@ func TestNotFound(t *testing.T) {
 
 	// GetAggregate
 	st := domain.NewStockItem()
+	st.SetAggregateID("1x")
 	err := es.GetAggregate(st.GetAggregateID(), st, 0)
 	require.Equal(t, gocqrs.ErrNotFound, err)
 

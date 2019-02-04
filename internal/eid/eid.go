@@ -11,19 +11,19 @@ var (
 	freezeaid = ""
 )
 
-func FreezeAggregateID(id string) {
+func FreezeID(id string) {
 	freezeaid = id
 }
 
-func UnFreezeAggregateID() {
+func UnFreezeID() {
 	freezeaid = emptyStr
 }
 
-func CreateEID(aggID string, version int64) string {
+func CreateEventID(aggID string, version int64) string {
 	return aggID + strconv.FormatInt(version, 10)
 }
 
-func GenerateAggregateID() string {
+func GenerateID() string {
 	if freezeaid != emptyStr {
 		return freezeaid
 	}

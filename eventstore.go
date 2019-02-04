@@ -14,6 +14,8 @@ type RetryHandler func() error
 
 type SubscribeHandler func(events []*EventMessage)
 
+const emptyStr = ""
+
 //go:generate mockery -name=EventStore
 type EventStore interface {
 	SetEventLimit(limit int64)
@@ -29,16 +31,14 @@ type eventStore struct {
 	storage  Storage
 	eventBus EventBus
 	limit    int64
-	limitInt int
 }
 
 func NewEventStore(storage Storage, eventBus EventBus) EventStore {
-	return &eventStore{storage, eventBus, 100, 100}
+	return &eventStore{storage, eventBus, 100}
 }
 
 func (es *eventStore) SetEventLimit(limit int64) {
 	es.limit = limit
-	es.limitInt = int(limit)
 }
 
 func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) error {
@@ -65,7 +65,7 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 		}
 	}
 
-	for n >= es.limitInt {
+	for n >= int(es.limit) {
 		if err = es.GetAggregate(id, agg, lastEvent.Seq); err != nil {
 			if err == ErrNotFound {
 				break
@@ -123,6 +123,10 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		return ErrEventLimitExceed
 	}
 
+	if agg.GetAggregateID() == emptyStr {
+		return ErrNoAggregateID
+	}
+
 	payloads := make([]*EventMessage, len(events))
 	now := clock.Now().Unix()
 	aggType := agg.GetAggregateType()
@@ -132,7 +136,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		agg.IncreaseVersion()
 		aggid := agg.GetAggregateID()
 		version := agg.GetVersion()
-		id := eid.CreateEID(aggid, version)
+		id := eid.CreateEventID(aggid, version)
 		payloads[i] = &EventMessage{
 			ID:            id,
 			AggregateID:   aggid,
@@ -160,7 +164,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	}
 
 	if snapshot.Version == 0 {
-		return ErrZeroVersionNotAllowed
+		return ErrInvalidVersionNotAllowed
 	}
 
 	return es.storage.BeginTx(func(ctx context.Context) error {

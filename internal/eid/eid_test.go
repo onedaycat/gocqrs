@@ -7,16 +7,16 @@ import (
 )
 
 func TestGenerateEID(t *testing.T) {
-	id := CreateEID("bh9vq3krtr34lt1oedc0", 99)
+	id := CreateEventID("bh9vq3krtr34lt1oedc0", 99)
 	require.Len(t, id, 22)
 }
 
 func TestGenerateAggregateID(t *testing.T) {
-	FreezeAggregateID("1")
-	id := GenerateAggregateID()
+	FreezeID("1")
+	id := GenerateID()
 	require.Equal(t, "1", id)
 
-	UnFreezeAggregateID()
-	id = GenerateAggregateID()
+	UnFreezeID()
+	id = GenerateID()
 	require.Len(t, id, 20)
 }

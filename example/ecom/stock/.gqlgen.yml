@@ -1,0 +1,13 @@
+schema:
+  - schema.graphql
+
+model:
+  filename: ./schema.go
+  package: stock
+
+exec:
+  package: stock
+
+models:
+  AWSJSON:
+    model: github.com/onedaycat/gqlscalars.AWSJSON

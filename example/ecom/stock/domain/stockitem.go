@@ -17,6 +17,7 @@ func NewStockItem() *StockItem {
 }
 
 func (st *StockItem) Create(productID string, qty Qty) {
+	st.SetAggregateID(productID)
 	st.Qty = qty
 	st.Publish(&StockItemCreated{
 		ProductID: st.GetAggregateID(),

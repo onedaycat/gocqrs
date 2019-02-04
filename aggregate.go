@@ -9,13 +9,14 @@ type AggregateType = string
 type AggregateRoot interface {
 	Apply(payload *EventMessage) error
 	GetAggregateID() string
-	SetAggregateID(id string)
-	GetAggregateType() AggregateType
+	GenerateAggregateID()
+	SetAggregateID(id string) *AggregateBase
+	GetAggregateType() string
 	GetVersion() int64
-	SetVersion(version int64)
+	SetVersion(version int64) *AggregateBase
 	GetCurrentVersion() int64
 	GetLastUpdate() int64
-	SetLastUpdate(t int64)
+	SetLastUpdate(t int64) *AggregateBase
 	IncreaseVersion()
 	GetEvents() []Event
 	ClearEvents()
@@ -36,15 +37,6 @@ type AggregateBase struct {
 // InitAggregate if id is empty, id will be generated
 func InitAggregate() *AggregateBase {
 	return &AggregateBase{
-		id:      eid.GenerateAggregateID(),
-		events:  make([]Event, 0, 1),
-		version: 0,
-	}
-}
-
-func InitAggregateWithID(id string) *AggregateBase {
-	return &AggregateBase{
-		id:      id,
 		events:  make([]Event, 0, 1),
 		version: 0,
 	}
@@ -54,8 +46,13 @@ func (a *AggregateBase) GetAggregateID() string {
 	return a.id
 }
 
-func (a *AggregateBase) SetAggregateID(id string) {
+func (a *AggregateBase) GenerateAggregateID() {
+	a.id = eid.GenerateID()
+}
+
+func (a *AggregateBase) SetAggregateID(id string) *AggregateBase {
 	a.id = id
+	return a
 }
 
 func (a *AggregateBase) Publish(event Event) {
@@ -78,8 +75,10 @@ func (a *AggregateBase) GetVersion() int64 {
 	return a.version
 }
 
-func (a *AggregateBase) SetVersion(version int64) {
+func (a *AggregateBase) SetVersion(version int64) *AggregateBase {
 	a.version = version
+
+	return a
 }
 
 func (a *AggregateBase) GetCurrentVersion() int64 {
@@ -102,6 +101,8 @@ func (a *AggregateBase) GetLastUpdate() int64 {
 	return a.lastUpdate
 }
 
-func (a *AggregateBase) SetLastUpdate(lastUpdate int64) {
+func (a *AggregateBase) SetLastUpdate(lastUpdate int64) *AggregateBase {
 	a.lastUpdate = lastUpdate
+
+	return a
 }
