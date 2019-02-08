@@ -6,12 +6,13 @@ import (
 	"github.com/onedaycat/gocqrs"
 )
 
-type OnApplyEventMessageHandler func(msg *gocqrs.EventMessage) error
+type OnEventMessageHandler func(msg *gocqrs.EventMessage) error
 type OnErrorHandler func(msg *gocqrs.EventMessage, err error)
 
 type DyanmoStream struct {
-	onError             OnErrorHandler
-	onApplyEventMessage OnApplyEventMessageHandler
+	onError              OnErrorHandler
+	onNewEventMessage    OnEventMessageHandler
+	onRemoveEventMessage OnEventMessageHandler
 }
 
 func New() *DyanmoStream {
@@ -24,12 +25,16 @@ func (s *DyanmoStream) OnError(fn OnErrorHandler) {
 	s.onError = fn
 }
 
-func (s *DyanmoStream) OnApplyEventMessage(fn OnApplyEventMessageHandler) {
-	s.onApplyEventMessage = fn
+func (s *DyanmoStream) OnNewEventMessage(fn OnEventMessageHandler) {
+	s.onNewEventMessage = fn
+}
+
+func (s *DyanmoStream) OnRemoveEventMessage(fn OnEventMessageHandler) {
+	s.onRemoveEventMessage = fn
 }
 
 func (s *DyanmoStream) Run(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
-	if s.onApplyEventMessage == nil {
+	if s.onNewEventMessage == nil {
 		return nil, nil
 	}
 
@@ -40,10 +45,21 @@ func (s *DyanmoStream) Run(ctx context.Context, event *DynamoDBStreamEvent) (int
 			continue
 		}
 
-		msg = record.DynamoDB.Payload.EventMessage
-		if err = s.onApplyEventMessage(record.DynamoDB.Payload.EventMessage); err != nil {
-			s.onError(msg, err)
+		switch record.EventName {
+		case eventInsert:
+			msg = record.DynamoDB.NewImage.EventMessage
+			if err = s.onNewEventMessage(record.DynamoDB.NewImage.EventMessage); err != nil {
+				s.onError(msg, err)
+			}
+		case eventRemove:
+			msg = record.DynamoDB.NewImage.EventMessage
+			if err = s.onRemoveEventMessage(record.DynamoDB.NewImage.EventMessage); err != nil {
+				s.onError(msg, err)
+			}
+		default:
+			continue
 		}
+
 	}
 
 	return nil, nil

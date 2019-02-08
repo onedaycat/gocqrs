@@ -29,6 +29,7 @@ func (p *Payload) UnmarshalJSON(b []byte) error {
 }
 
 const eventInsert = "INSERT"
+const eventRemove = "REMOVE"
 
 type Records = []*Record
 
@@ -42,5 +43,6 @@ type Record struct {
 }
 
 type DynamoDBRecord struct {
-	Payload *Payload `json:"NewImage"`
+	NewImage *Payload `json:"NewImage"`
+	OldImage *Payload `json:"OldImage"`
 }

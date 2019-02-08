@@ -56,7 +56,33 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 					"StreamViewType": "NEW_IMAGE"
 				},
 				"eventSourceARN": "arn:aws:dynamodb:us-east-1:123456789012:table/BarkTable/stream/2016-11-16T20:42:48.104"
-			}
+			},
+			{
+				"eventID":"3",
+				"eventName":"REMOVE",
+				"eventVersion":"1.0",
+				"eventSource":"aws:dynamodb",
+				"awsRegion":"us-east-1",
+				"dynamodb":{
+				   "Keys":{
+					  "Id":{
+						 "N":"101"
+					  }
+				   },
+				   "OldImage":{
+					  "Message":{
+						 "S":"This item has changed"
+					  },
+					  "Id":{
+						 "N":"101"
+					  }
+				   },
+				   "SequenceNumber":"333",
+				   "SizeBytes":38,
+				   "StreamViewType":"NEW_AND_OLD_IMAGES"
+				},
+				"eventSourceARN":"stream-ARN"
+			 }
 		]
 	}
 	`)
@@ -68,12 +94,13 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 	event := &DynamoDBStreamEvent{}
 	err := json.Unmarshal(payload, event)
 	require.NoError(t, err)
-	require.Len(t, event.Records, 1)
+	require.Len(t, event.Records, 2)
 	require.Equal(t, eventInsert, event.Records[0].EventName)
-	require.Equal(t, "domain.aggregate", event.Records[0].DynamoDB.Payload.EventMessage.AggregateType)
+	require.Equal(t, eventRemove, event.Records[1].EventName)
+	require.Equal(t, "domain.aggregate", event.Records[0].DynamoDB.NewImage.EventMessage.AggregateType)
 
 	pp := &pdata{}
-	err = event.Records[0].DynamoDB.Payload.EventMessage.Payload.UnmarshalPayload(pp)
+	err = event.Records[0].DynamoDB.NewImage.EventMessage.Payload.UnmarshalPayload(pp)
 	require.NoError(t, err)
 	require.Equal(t, &pdata{"1"}, pp)
 }

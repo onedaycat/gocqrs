@@ -3,6 +3,7 @@ package dynamodb
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -38,6 +39,7 @@ type DynamoDBEventStore struct {
 	db              *dynamodb.DynamoDB
 	eventstoreTable string
 	snapshotTable   string
+	ttl             time.Duration
 }
 
 func New(sess *session.Session, eventstoreTable, snapshotTable string) *DynamoDBEventStore {
@@ -45,7 +47,12 @@ func New(sess *session.Session, eventstoreTable, snapshotTable string) *DynamoDB
 		db:              dynamodb.New(sess),
 		eventstoreTable: eventstoreTable,
 		snapshotTable:   snapshotTable,
+		ttl:             24 * 30 * time.Hour,
 	}
+}
+
+func (d *DynamoDBEventStore) SetTTL(ttl time.Duration) {
+	d.ttl = ttl
 }
 
 func (d *DynamoDBEventStore) TruncateTables() {
@@ -113,7 +120,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		BillingMode: aws.String("PAY_PER_REQUEST"),
 		StreamSpecification: &dynamodb.StreamSpecification{
 			StreamEnabled:  aws.Bool(enableStream),
-			StreamViewType: aws.String("NEW_IMAGE"),
+			StreamViewType: aws.String("NEW_AND_OLD_IMAGES"),
 		},
 		TableName: &d.eventstoreTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
@@ -367,11 +374,15 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 		},
 	})
 
+	t := time.Unix(payloads[0].Time, 0)
+	ttl := aws.String(strconv.FormatInt(t.Add(d.ttl).Unix(), 10))
 	for i := 0; i < len(payloads); i++ {
 		payloadReq, err = dynamodbattribute.MarshalMap(payloads[i])
 		if err != nil {
 			return err
 		}
+
+		payloadReq["ttl"] = &dynamodb.AttributeValue{N: ttl}
 
 		putES = append(putES, &dynamodb.TransactWriteItem{
 			Put: &dynamodb.Put{
