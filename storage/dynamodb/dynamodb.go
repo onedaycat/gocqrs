@@ -31,6 +31,7 @@ var (
 	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :s")
 	getByAggregateTypeCond         = aws.String("b=:b")
 	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :s")
+	falseStrongRead                = aws.Bool(false)
 )
 
 type DynamoDBEventStore struct {
@@ -229,6 +230,7 @@ func (d *DynamoDBEventStore) Get(aggID string, seq, limit int64) ([]*gocqrs.Even
 		KeyConditionExpression:    keyCond,
 		Limit:                     &limit,
 		ExpressionAttributeValues: exValue,
+		ConsistentRead:            falseStrongRead,
 	})
 
 	if err != nil {
@@ -264,6 +266,7 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq, lim
 		Limit:                     &limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
+		ConsistentRead:            falseStrongRead,
 	})
 
 	if err != nil {
@@ -299,6 +302,7 @@ func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, se
 		Limit:                     &limit,
 		KeyConditionExpression:    keyCond,
 		ExpressionAttributeValues: exValue,
+		ConsistentRead:            falseStrongRead,
 	})
 
 	if err != nil {
@@ -319,7 +323,8 @@ func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, se
 
 func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error) {
 	output, err := d.db.GetItem(&dynamodb.GetItemInput{
-		TableName: &d.snapshotTable,
+		TableName:      &d.snapshotTable,
+		ConsistentRead: falseStrongRead,
 		Key: map[string]*dynamodb.AttributeValue{
 			xid: &dynamodb.AttributeValue{S: &aggID},
 		},

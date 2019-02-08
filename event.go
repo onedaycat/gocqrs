@@ -14,5 +14,5 @@ type EventMessage struct {
 }
 
 type Event interface {
-	GetEventType() EventType
+	// GetEventType() string
 }

@@ -17,10 +17,10 @@ func NewStockItem() *StockItem {
 }
 
 func (st *StockItem) Create(productID string, qty Qty) {
-	st.SetAggregateID(productID)
+	st.ProductID = productID
 	st.Qty = qty
-	st.Publish(&StockItemCreated{
-		ProductID: st.GetAggregateID(),
+	st.Publish(StockItemCreatedEvent, &StockItemCreated{
+		ProductID: productID,
 		Qty:       st.Qty,
 	})
 }
@@ -57,7 +57,7 @@ func (st *StockItem) Apply(msg *gocqrs.EventMessage) error {
 
 func (st *StockItem) Add(amount Qty) {
 	st.Qty = st.Qty.Add(amount)
-	st.Publish(&StockItemUpdated{
+	st.Publish(StockItemUpdatedEvent, &StockItemUpdated{
 		ProductID: st.ProductID,
 		Qty:       st.Qty,
 	})
@@ -70,7 +70,7 @@ func (st *StockItem) Sub(amount Qty) error {
 		return err
 	}
 
-	st.Publish(&StockItemUpdated{
+	st.Publish(StockItemUpdatedEvent, &StockItemUpdated{
 		ProductID: st.ProductID,
 		Qty:       st.Qty,
 	})
@@ -81,7 +81,7 @@ func (st *StockItem) Sub(amount Qty) error {
 func (st *StockItem) Remove() error {
 	st.MarkAsRemoved()
 
-	st.Publish(&StockItemRemoved{
+	st.Publish(StockItemRemovedEvent, &StockItemRemoved{
 		ProductID: st.ProductID,
 	})
 

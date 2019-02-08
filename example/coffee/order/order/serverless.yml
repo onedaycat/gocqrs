@@ -1,0 +1,30 @@
+service: order
+
+package:
+  exclude:
+    - ./**
+  include:
+    - ./bin/**
+
+provider:
+  name: aws
+  accountId: ${env:AWS_ACCOUNT_ID}
+  runtime: go1.x
+  stage: ${env:APP_STAGE}
+  stackName: ${self:service}-${self:provider.stage}
+  region: ap-southeast-1
+  memorySize: 1024
+  logRetentionInDays: 7
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Resource: '*'
+      Action:
+        - 'dynamodb:*'
+
+functions:
+  service:
+    handler: bin/app
+    environment:
+      APP_MONGODB_ENDPOINT: ${env:HALO_MONGODB_I18N_ENDPOINT}
+      APP_MONGODB_DATABASE: ${env:HALO_MONGODB_I18N_DATABASE}
+      APP_DYNAMODB_ENDPOINT: ${env:APP_DYNAMODB_ENDPOINT}

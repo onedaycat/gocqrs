@@ -12,8 +12,6 @@ import (
 // if return bool is false no retry
 type RetryHandler func() error
 
-type SubscribeHandler func(events []*EventMessage)
-
 const emptyStr = ""
 
 //go:generate mockery -name=EventStore
@@ -130,6 +128,8 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	payloads := make([]*EventMessage, len(events))
 	now := clock.Now().Unix()
 	aggType := agg.GetAggregateType()
+	eventTypes := agg.GetEventTypes()
+
 	var lastEvent *EventMessage
 
 	for i := 0; i < len(events); i++ {
@@ -142,7 +142,7 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 			AggregateID:   aggid,
 			AggregateType: aggType,
 			Version:       version,
-			Type:          events[i].GetEventType(),
+			Type:          eventTypes[i],
 			Payload:       NewPayload(events[i]),
 			Time:          now,
 			Seq:           NewSeq(now, version),

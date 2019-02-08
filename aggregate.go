@@ -9,7 +9,6 @@ type AggregateType = string
 type AggregateRoot interface {
 	Apply(payload *EventMessage) error
 	GetAggregateID() string
-	GenerateAggregateID()
 	SetAggregateID(id string) *AggregateBase
 	GetAggregateType() string
 	GetVersion() int64
@@ -19,8 +18,9 @@ type AggregateRoot interface {
 	SetLastUpdate(t int64) *AggregateBase
 	IncreaseVersion()
 	GetEvents() []Event
+	GetEventTypes() []EventType
 	ClearEvents()
-	Publish(event Event)
+	Publish(eventType EventType, event Event)
 	MarkAsRemoved()
 	IsRemoved() bool
 	IsNew() bool
@@ -29,6 +29,7 @@ type AggregateRoot interface {
 type AggregateBase struct {
 	id         string
 	events     []Event
+	eventTypes []EventType
 	removed    bool
 	version    int64
 	lastUpdate int64
@@ -37,8 +38,10 @@ type AggregateBase struct {
 // InitAggregate if id is empty, id will be generated
 func InitAggregate() *AggregateBase {
 	return &AggregateBase{
-		events:  make([]Event, 0, 1),
-		version: 0,
+		id:         eid.GenerateID(),
+		events:     make([]Event, 0, 1),
+		eventTypes: make([]EventType, 0, 1),
+		version:    0,
 	}
 }
 
@@ -46,21 +49,22 @@ func (a *AggregateBase) GetAggregateID() string {
 	return a.id
 }
 
-func (a *AggregateBase) GenerateAggregateID() {
-	a.id = eid.GenerateID()
-}
-
 func (a *AggregateBase) SetAggregateID(id string) *AggregateBase {
 	a.id = id
 	return a
 }
 
-func (a *AggregateBase) Publish(event Event) {
+func (a *AggregateBase) Publish(eventType EventType, event Event) {
 	a.events = append(a.events, event)
+	a.eventTypes = append(a.eventTypes, eventType)
 }
 
 func (a *AggregateBase) GetEvents() []Event {
 	return a.events
+}
+
+func (a *AggregateBase) GetEventTypes() []EventType {
+	return a.eventTypes
 }
 
 func (a *AggregateBase) MarkAsRemoved() {
@@ -87,6 +91,7 @@ func (a *AggregateBase) GetCurrentVersion() int64 {
 
 func (a *AggregateBase) ClearEvents() {
 	a.events = make([]Event, 0, 1)
+	a.eventTypes = make([]EventType, 0, 1)
 }
 
 func (a *AggregateBase) IncreaseVersion() {

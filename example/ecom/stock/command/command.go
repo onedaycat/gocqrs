@@ -6,10 +6,10 @@ type CreateStockProduct struct {
 }
 
 type UpdateStockQuantity struct {
-	ProductID string
-	Qty       int
+	ID  string
+	Qty int
 }
 
 type RemoveStockProduct struct {
-	ProductID string
+	ID string
 }
