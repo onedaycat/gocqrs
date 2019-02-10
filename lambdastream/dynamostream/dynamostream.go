@@ -6,61 +6,88 @@ import (
 	"github.com/onedaycat/gocqrs"
 )
 
-type OnEventMessageHandler func(msg *gocqrs.EventMessage) error
-type OnErrorHandler func(msg *gocqrs.EventMessage, err error)
+type EventMessage = gocqrs.EventMessage
+type EventMessages = []*gocqrs.EventMessage
 
-type DyanmoStream struct {
-	onError              OnErrorHandler
-	onNewEventMessage    OnEventMessageHandler
-	onRemoveEventMessage OnEventMessageHandler
-}
+type LambdaHandler func(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error)
+type EventMessageHandler func(msg *EventMessage) error
+type EventMessagesHandler func(msgs EventMessages) error
+type EventMessageErrorHandler func(msg *EventMessage, err error)
+type EventMessagesErrorHandler func(msgs EventMessages, err error)
+type KeyHandler func(record *Record) string
+
+type DyanmoStream struct{}
 
 func New() *DyanmoStream {
-	return &DyanmoStream{
-		onError: func(msg *gocqrs.EventMessage, err error) {},
-	}
+	return &DyanmoStream{}
 }
 
-func (s *DyanmoStream) OnError(fn OnErrorHandler) {
-	s.onError = fn
-}
+func (s *DyanmoStream) CreateIteratorHandler(handler EventMessageHandler, onError EventMessageErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
+		}
+		if onError == nil {
+			onError = func(msg *EventMessage, err error) {}
+		}
 
-func (s *DyanmoStream) OnNewEventMessage(fn OnEventMessageHandler) {
-	s.onNewEventMessage = fn
-}
+		var err error
+		var msg *EventMessage
+		for _, record := range event.Records {
+			if record.EventName != eventInsert {
+				continue
+			}
 
-func (s *DyanmoStream) OnRemoveEventMessage(fn OnEventMessageHandler) {
-	s.onRemoveEventMessage = fn
-}
+			msg = record.DynamoDB.NewImage.EventMessage
+			if err = handler(record.DynamoDB.NewImage.EventMessage); err != nil {
+				onError(msg, err)
+			}
+		}
 
-func (s *DyanmoStream) Run(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
-	if s.onNewEventMessage == nil {
 		return nil, nil
 	}
+}
 
-	var err error
-	var msg *gocqrs.EventMessage
-	for _, record := range event.Records {
-		if eventInsert != record.EventName {
-			continue
+func (s *DyanmoStream) CreateConcurencyHandler(getKey KeyHandler, handler EventMessageHandler, onError EventMessageErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
+		}
+		if onError == nil {
+			onError = func(msg *EventMessage, err error) {}
 		}
 
-		switch record.EventName {
-		case eventInsert:
-			msg = record.DynamoDB.NewImage.EventMessage
-			if err = s.onNewEventMessage(record.DynamoDB.NewImage.EventMessage); err != nil {
-				s.onError(msg, err)
+		cm := newConcurrencyManager(len(event.Records))
+
+		for _, record := range event.Records {
+			if record.EventName != eventInsert {
+				cm.wg.Done()
+				continue
 			}
-		case eventRemove:
-			msg = record.DynamoDB.NewImage.EventMessage
-			if err = s.onRemoveEventMessage(record.DynamoDB.NewImage.EventMessage); err != nil {
-				s.onError(msg, err)
-			}
-		default:
-			continue
+
+			cm.Send(record, getKey, handler, onError)
 		}
 
+		cm.Wait()
+
+		return nil, nil
 	}
+}
 
-	return nil, nil
+func (s *DyanmoStream) CreateGroupConcurencyHandler(getKey KeyHandler, handler EventMessagesHandler, onError EventMessagesErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *DynamoDBStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
+		}
+		if onError == nil {
+			onError = func(msgs EventMessages, err error) {}
+		}
+
+		cm := newGroupConcurrencyManager(len(event.Records))
+
+		cm.Send(event.Records, getKey, handler, onError)
+		cm.Wait()
+
+		return nil, nil
+	}
 }

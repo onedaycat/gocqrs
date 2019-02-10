@@ -19,10 +19,10 @@ func TestPublish(t *testing.T) {
 	k := NewKinesisEventBus(sess)
 
 	events := []*gocqrs.EventMessage{
-		{ID: "1", AggregateID: "a1"},
-		{ID: "2", AggregateID: "a2"},
-		{ID: "3", AggregateID: "a3"},
-		{ID: "4", AggregateID: "a1"},
+		{EventID: "1", AggregateID: "a1"},
+		{EventID: "2", AggregateID: "a2"},
+		{EventID: "3", AggregateID: "a3"},
+		{EventID: "4", AggregateID: "a1"},
 	}
 
 	err = k.Publish(events)

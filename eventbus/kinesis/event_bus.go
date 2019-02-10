@@ -2,7 +2,7 @@ package kinesis
 
 import (
 	"encoding/json"
-	"log"
+	"errors"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,6 +14,10 @@ import (
 var (
 	streamName  = "eventsource"
 	sstreamName = aws.String("eventsource")
+)
+
+var (
+	ErrPublishFailed = errors.New("One or more events published failed")
 )
 
 type KinesisEventBus struct {
@@ -48,8 +52,8 @@ func (k *KinesisEventBus) Publish(events []*gocqrs.EventMessage) error {
 		StreamName: sstreamName,
 	})
 
-	if *out.FailedRecordCount > 0 {
-		log.Println("Kinesis Put Failed: ", *out.FailedRecordCount, "records")
+	if out.FailedRecordCount != nil && *out.FailedRecordCount > 0 {
+		return ErrPublishFailed
 	}
 
 	return err

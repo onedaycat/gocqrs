@@ -2,12 +2,14 @@ package domain
 
 import (
 	"github.com/onedaycat/gocqrs"
+	"github.com/onedaycat/gocqrs/common/clock"
 )
 
 type StockItem struct {
 	*gocqrs.AggregateBase
 	ProductID string
 	Qty       Qty
+	RemovedAt int64
 }
 
 func NewStockItem() *StockItem {
@@ -30,7 +32,7 @@ func (st *StockItem) GetAggregateType() gocqrs.AggregateType {
 }
 
 func (st *StockItem) Apply(msg *gocqrs.EventMessage) error {
-	switch msg.Type {
+	switch msg.EventType {
 	case StockItemCreatedEvent:
 		event := &StockItemCreated{}
 		if err := msg.Payload.UnmarshalPayload(event); err != nil {
@@ -48,7 +50,13 @@ func (st *StockItem) Apply(msg *gocqrs.EventMessage) error {
 		st.ProductID = event.ProductID
 		st.Qty = event.Qty
 	case StockItemRemovedEvent:
-		st.MarkAsRemoved()
+		event := &StockItemRemoved{}
+		if err := msg.Payload.UnmarshalPayload(event); err != nil {
+			return err
+		}
+
+		st.ProductID = event.ProductID
+		st.RemovedAt = event.RemovedAt
 		return nil
 	}
 
@@ -79,11 +87,16 @@ func (st *StockItem) Sub(amount Qty) error {
 }
 
 func (st *StockItem) Remove() error {
-	st.MarkAsRemoved()
+	st.RemovedAt = clock.Now().Unix()
 
 	st.Publish(StockItemRemovedEvent, &StockItemRemoved{
 		ProductID: st.ProductID,
+		RemovedAt: st.RemovedAt,
 	})
 
 	return nil
+}
+
+func (st *StockItem) IsRemoved() bool {
+	return st.RemovedAt > 0
 }

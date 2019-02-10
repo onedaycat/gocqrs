@@ -6,41 +6,78 @@ import (
 	"github.com/onedaycat/gocqrs"
 )
 
-type OnApplyEventMessageHandler func(msg *gocqrs.EventMessage) error
-type OnErrorHandler func(msg *gocqrs.EventMessage, err error)
+type EventMessage = gocqrs.EventMessage
+type EventMessages = []*gocqrs.EventMessage
 
-type KinesisStream struct {
-	onError             OnErrorHandler
-	onApplyEventMessage OnApplyEventMessageHandler
-}
+type LambdaHandler func(ctx context.Context, event *KinesisStreamEvent) (interface{}, error)
+type EventMessageHandler func(msg *EventMessage) error
+type EventMessagesHandler func(msgs EventMessages) error
+type EventMessageErrorHandler func(msg *EventMessage, err error)
+type EventMessagesErrorHandler func(msgs EventMessages, err error)
+
+type KinesisStream struct{}
 
 func New() *KinesisStream {
-	return &KinesisStream{
-		onError: func(msg *gocqrs.EventMessage, err error) {},
-	}
+	return &KinesisStream{}
 }
 
-func (s *KinesisStream) OnError(fn OnErrorHandler) {
-	s.onError = fn
-}
+func (s *KinesisStream) CreateIteratorHandler(handler EventMessageHandler, onError EventMessageErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *KinesisStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
+		}
+		if onError == nil {
+			onError = func(msg *EventMessage, err error) {}
+		}
 
-func (s *KinesisStream) OnApplyEventMessage(fn OnApplyEventMessageHandler) {
-	s.onApplyEventMessage = fn
-}
+		var err error
+		var msg *gocqrs.EventMessage
+		for _, record := range event.Records {
+			msg = record.Kinesis.Data.EventMessage
+			if err = handler(record.Kinesis.Data.EventMessage); err != nil {
+				onError(msg, err)
+			}
+		}
 
-func (s *KinesisStream) Run(ctx context.Context, event *KinesisStreamEvent) (interface{}, error) {
-	if s.onApplyEventMessage == nil {
 		return nil, nil
 	}
+}
 
-	var err error
-	var msg *gocqrs.EventMessage
-	for _, record := range event.Records {
-		msg = record.Kinesis.Payload.EventMessage
-		if err = s.onApplyEventMessage(record.Kinesis.Payload.EventMessage); err != nil {
-			s.onError(msg, err)
+func (s *KinesisStream) CreateConcurencyHandler(handler EventMessageHandler, onError EventMessageErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *KinesisStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
 		}
-	}
+		if onError == nil {
+			onError = func(msg *EventMessage, err error) {}
+		}
 
-	return nil, nil
+		cm := newConcurrencyManager(len(event.Records))
+
+		for _, record := range event.Records {
+			cm.Send(record, handler, onError)
+		}
+
+		cm.Wait()
+
+		return nil, nil
+	}
+}
+
+func (s *KinesisStream) CreateGroupConcurencyHandler(handler EventMessagesHandler, onError EventMessagesErrorHandler) LambdaHandler {
+	return func(ctx context.Context, event *KinesisStreamEvent) (interface{}, error) {
+		if handler == nil {
+			return nil, nil
+		}
+		if onError == nil {
+			onError = func(msgs EventMessages, err error) {}
+		}
+
+		cm := newGroupConcurrencyManager(len(event.Records))
+
+		cm.Send(event.Records, handler, onError)
+		cm.Wait()
+
+		return nil, nil
+	}
 }

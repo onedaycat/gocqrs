@@ -1,11 +1,32 @@
 package gocqrs
 
 type Snapshot struct {
-	ID            string        `json:"id" bson:"_id"`
+	AggregateID   string        `json:"a" bson:"_id"`
 	AggregateType AggregateType `json:"b" bson:"b"`
-	Version       int64         `json:"v" bson:"v"`
 	Payload       *Payload      `json:"p" bson:"p"`
-	LastUpdate    int64         `json:"t" bson:"t"`
-	LastEvent     *EventMessage `json:"e" bson:"e"`
-	IsRemoved     bool          `json:"r" bson:"r"`
+	EventID       string        `json:"i" bson:"i"`
+	Time          int64         `json:"t" bson:"t"`
+	Seq           int64         `json:"s" bson:"s"`
+	TimeSeq       int64         `json:"x" bson:"x"`
+	Metadata      *Payload      `json:"m" bson:"m"`
+}
+
+type SnapshotStategyHandler func(agg AggregateRoot, events []*EventMessage) bool
+
+func EveryNEventSanpshot(nEvent int64) SnapshotStategyHandler {
+	return func(agg AggregateRoot, events []*EventMessage) bool {
+		for _, event := range events {
+			if event.Seq%nEvent == 0 {
+				return true
+			}
+		}
+
+		return false
+	}
+}
+
+func LatestEventSanpshot() SnapshotStategyHandler {
+	return func(agg AggregateRoot, events []*EventMessage) bool {
+		return true
+	}
 }

@@ -5,11 +5,10 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	gocqrs "github.com/onedaycat/gocqrs"
 )
 
 type Payload struct {
-	EventMessage *gocqrs.EventMessage
+	EventMessage *EventMessage
 }
 
 func (p *Payload) UnmarshalJSON(b []byte) error {
@@ -19,7 +18,7 @@ func (p *Payload) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	event := &gocqrs.EventMessage{}
+	event := &EventMessage{}
 	if err = dynamodbattribute.UnmarshalMap(data, event); err != nil {
 		return err
 	}
@@ -42,7 +41,21 @@ type Record struct {
 	DynamoDB  *DynamoDBRecord `json:"dynamodb"`
 }
 
+func (r *Record) add(key, val, eid string) {
+	r.DynamoDB = &DynamoDBRecord{
+		Keys: map[string]*dynamodb.AttributeValue{
+			key: &dynamodb.AttributeValue{S: &val},
+		},
+		NewImage: &Payload{
+			EventMessage: &EventMessage{
+				EventID: eid,
+			},
+		},
+	}
+}
+
 type DynamoDBRecord struct {
-	NewImage *Payload `json:"NewImage"`
-	OldImage *Payload `json:"OldImage"`
+	Keys     map[string]*dynamodb.AttributeValue `json:"Keys"`
+	NewImage *Payload                            `json:"NewImage"`
+	OldImage *Payload                            `json:"OldImage"`
 }

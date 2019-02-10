@@ -1,7 +1,6 @@
 package dynamodb
 
 import (
-	"context"
 	"strconv"
 	"time"
 
@@ -14,24 +13,25 @@ import (
 )
 
 const (
-	xid                  = "id"
+	aggidK               = "a"
 	emptyStr             = ""
-	seqKV                = ":s"
+	seqKV                = ":x"
 	getKV                = ":a"
 	getByEventTypeKV     = ":et"
 	getByAggregateTypeKV = ":b"
 )
 
 var (
-	eSIndex                        = aws.String("e-s-index")
-	bSIndex                        = aws.String("b-s-index")
-	saveCond                       = aws.String("attribute_not_exists(s)")
+	eSIndex                        = aws.String("e-x-index")
+	bSIndex                        = aws.String("b-x-index")
+	saveCond                       = aws.String("attribute_not_exists(x)")
+	saveSnapCond                   = aws.String("attribute_not_exists(x) or x < :x")
 	getCond                        = aws.String("a=:a")
-	getCondWithTime                = aws.String("a=:a and s > :s")
+	getCondWithTime                = aws.String("a=:a and x > :x")
 	getByEventTypeCond             = aws.String("e=:et")
-	getByEventTypeWithTimeCond     = aws.String("e=:et and s > :s")
+	getByEventTypeWithTimeCond     = aws.String("e=:et and x > :x")
 	getByAggregateTypeCond         = aws.String("b=:b")
-	getByAggregateTypeWithTimeCond = aws.String("b=:b and s > :s")
+	getByAggregateTypeWithTimeCond = aws.String("b=:b and x > :x")
 	falseStrongRead                = aws.Bool(false)
 )
 
@@ -72,7 +72,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
 					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
-					"s": &dynamodb.AttributeValue{N: output.Items[i]["s"].N},
+					"x": &dynamodb.AttributeValue{N: output.Items[i]["x"].N},
 				},
 			},
 		}
@@ -100,7 +100,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 		keyStores[i] = &dynamodb.WriteRequest{
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
-					"id": &dynamodb.AttributeValue{S: output.Items[i]["id"].S},
+					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
 				},
 			},
 		}
@@ -120,7 +120,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		BillingMode: aws.String("PAY_PER_REQUEST"),
 		StreamSpecification: &dynamodb.StreamSpecification{
 			StreamEnabled:  aws.Bool(enableStream),
-			StreamViewType: aws.String("NEW_AND_OLD_IMAGES"),
+			StreamViewType: aws.String("NEW_IMAGE"),
 		},
 		TableName: &d.eventstoreTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
@@ -137,7 +137,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				AttributeType: aws.String("S"),
 			},
 			{
-				AttributeName: aws.String("s"),
+				AttributeName: aws.String("x"),
 				AttributeType: aws.String("N"),
 			},
 		},
@@ -147,13 +147,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 				KeyType:       aws.String("HASH"),
 			},
 			{
-				AttributeName: aws.String("s"),
+				AttributeName: aws.String("x"),
 				KeyType:       aws.String("RANGE"),
 			},
 		},
 		GlobalSecondaryIndexes: []*dynamodb.GlobalSecondaryIndex{
 			{
-				IndexName: aws.String("e-s-index"),
+				IndexName: aws.String("e-x-index"),
 				Projection: &dynamodb.Projection{
 					ProjectionType: aws.String("ALL"),
 				},
@@ -163,13 +163,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 						KeyType:       aws.String("HASH"),
 					},
 					{
-						AttributeName: aws.String("s"),
+						AttributeName: aws.String("x"),
 						KeyType:       aws.String("RANGE"),
 					},
 				},
 			},
 			{
-				IndexName: aws.String("b-s-index"),
+				IndexName: aws.String("b-x-index"),
 				Projection: &dynamodb.Projection{
 					ProjectionType: aws.String("ALL"),
 				},
@@ -179,7 +179,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 						KeyType:       aws.String("HASH"),
 					},
 					{
-						AttributeName: aws.String("s"),
+						AttributeName: aws.String("x"),
 						KeyType:       aws.String("RANGE"),
 					},
 				},
@@ -199,13 +199,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		TableName:   &d.snapshotTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("id"),
+				AttributeName: aws.String("a"),
 				AttributeType: aws.String("S"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("id"),
+				AttributeName: aws.String("a"),
 				KeyType:       aws.String("HASH"),
 			},
 		},
@@ -221,7 +221,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 	return nil
 }
 
-func (d *DynamoDBEventStore) Get(aggID string, seq, limit int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetEvents(aggID string, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getKV: &dynamodb.AttributeValue{S: &aggID},
@@ -256,7 +256,7 @@ func (d *DynamoDBEventStore) Get(aggID string, seq, limit int64) ([]*gocqrs.Even
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetEventsByEventType(eventType gocqrs.EventType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByEventTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByEventTypeKV: &dynamodb.AttributeValue{S: &eventType},
@@ -292,7 +292,7 @@ func (d *DynamoDBEventStore) GetByEventType(eventType gocqrs.EventType, seq, lim
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetByAggregateType(aggType gocqrs.AggregateType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetEventsByAggregateType(aggType gocqrs.AggregateType, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getByAggregateTypeCond
 	exValue := map[string]*dynamodb.AttributeValue{
 		getByAggregateTypeKV: &dynamodb.AttributeValue{S: &aggType},
@@ -333,7 +333,7 @@ func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error)
 		TableName:      &d.snapshotTable,
 		ConsistentRead: falseStrongRead,
 		Key: map[string]*dynamodb.AttributeValue{
-			xid: &dynamodb.AttributeValue{S: &aggID},
+			aggidK: &dynamodb.AttributeValue{S: &aggID},
 		},
 	})
 	if err != nil {
@@ -352,11 +352,7 @@ func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error)
 	return snapshot, nil
 }
 
-func (d *DynamoDBEventStore) BeginTx(fn func(ctx context.Context) error) error {
-	return fn(context.Background())
-}
-
-func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventMessage, snapshot *gocqrs.Snapshot) error {
+func (d *DynamoDBEventStore) Save(events []*gocqrs.EventMessage, snapshot *gocqrs.Snapshot) error {
 	var err error
 	var snapshotReq map[string]*dynamodb.AttributeValue
 	snapshotReq, err = dynamodbattribute.MarshalMap(snapshot)
@@ -364,25 +360,30 @@ func (d *DynamoDBEventStore) Save(ctx context.Context, payloads []*gocqrs.EventM
 		return err
 	}
 
+	var putES []*dynamodb.TransactWriteItem
 	var payloadReq map[string]*dynamodb.AttributeValue
-	putES := make([]*dynamodb.TransactWriteItem, 0, len(payloads)+1)
 
-	putES = append(putES, &dynamodb.TransactWriteItem{
-		Put: &dynamodb.Put{
-			TableName: &d.snapshotTable,
-			Item:      snapshotReq,
-		},
-	})
+	if snapshot != nil {
+		putES = make([]*dynamodb.TransactWriteItem, 0, len(events)+1)
+		putES = append(putES, &dynamodb.TransactWriteItem{
+			Put: &dynamodb.Put{
+				TableName:           &d.snapshotTable,
+				ConditionExpression: saveSnapCond,
+				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+					seqKV: &dynamodb.AttributeValue{N: aws.String(strconv.FormatInt(snapshot.TimeSeq, 10))},
+				},
+				Item: snapshotReq,
+			},
+		})
+	} else {
+		putES = make([]*dynamodb.TransactWriteItem, 0, len(events))
+	}
 
-	t := time.Unix(payloads[0].Time, 0)
-	ttl := aws.String(strconv.FormatInt(t.Add(d.ttl).Unix(), 10))
-	for i := 0; i < len(payloads); i++ {
-		payloadReq, err = dynamodbattribute.MarshalMap(payloads[i])
+	for i := 0; i < len(events); i++ {
+		payloadReq, err = dynamodbattribute.MarshalMap(events[i])
 		if err != nil {
 			return err
 		}
-
-		payloadReq["ttl"] = &dynamodb.AttributeValue{N: ttl}
 
 		putES = append(putES, &dynamodb.TransactWriteItem{
 			Put: &dynamodb.Put{

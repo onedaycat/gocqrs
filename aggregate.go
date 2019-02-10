@@ -11,37 +11,33 @@ type AggregateRoot interface {
 	GetAggregateID() string
 	SetAggregateID(id string) *AggregateBase
 	GetAggregateType() string
-	GetVersion() int64
-	SetVersion(version int64) *AggregateBase
-	GetCurrentVersion() int64
-	GetLastUpdate() int64
-	SetLastUpdate(t int64) *AggregateBase
-	IncreaseVersion()
-	GetEvents() []Event
+	SetSequence(seq int64) *AggregateBase
+	GetSequence() int64
+	SetMetadata(metadata interface{})
+	GetMetadata() interface{}
+	IncreaseSequence()
+	GetEventPayloads() []interface{}
 	GetEventTypes() []EventType
 	ClearEvents()
-	Publish(eventType EventType, event Event)
-	MarkAsRemoved()
-	IsRemoved() bool
 	IsNew() bool
+	Publish(eventType EventType, event interface{})
 }
 
 type AggregateBase struct {
-	id         string
-	events     []Event
-	eventTypes []EventType
-	removed    bool
-	version    int64
-	lastUpdate int64
+	id            string
+	eventPayloads []interface{}
+	eventTypes    []EventType
+	seq           int64
+	metadata      interface{}
 }
 
 // InitAggregate if id is empty, id will be generated
 func InitAggregate() *AggregateBase {
 	return &AggregateBase{
-		id:         eid.GenerateID(),
-		events:     make([]Event, 0, 1),
-		eventTypes: make([]EventType, 0, 1),
-		version:    0,
+		id:            eid.GenerateID(),
+		eventPayloads: make([]interface{}, 0, 1),
+		eventTypes:    make([]EventType, 0, 1),
+		seq:           0,
 	}
 }
 
@@ -54,60 +50,46 @@ func (a *AggregateBase) SetAggregateID(id string) *AggregateBase {
 	return a
 }
 
-func (a *AggregateBase) Publish(eventType EventType, event Event) {
-	a.events = append(a.events, event)
+func (a *AggregateBase) Publish(eventType EventType, event interface{}) {
+	a.eventPayloads = append(a.eventPayloads, event)
 	a.eventTypes = append(a.eventTypes, eventType)
 }
 
-func (a *AggregateBase) GetEvents() []Event {
-	return a.events
+func (a *AggregateBase) GetEventPayloads() []interface{} {
+	return a.eventPayloads
 }
 
 func (a *AggregateBase) GetEventTypes() []EventType {
 	return a.eventTypes
 }
 
-func (a *AggregateBase) MarkAsRemoved() {
-	a.removed = true
-}
-
-func (a *AggregateBase) IsRemoved() bool {
-	return a.removed
-}
-
-func (a *AggregateBase) GetVersion() int64 {
-	return a.version
-}
-
-func (a *AggregateBase) SetVersion(version int64) *AggregateBase {
-	a.version = version
+func (a *AggregateBase) SetSequence(seq int64) *AggregateBase {
+	a.seq = seq
 
 	return a
-}
-
-func (a *AggregateBase) GetCurrentVersion() int64 {
-	return a.version + int64(len(a.events))
 }
 
 func (a *AggregateBase) ClearEvents() {
-	a.events = make([]Event, 0, 1)
+	a.eventPayloads = make([]interface{}, 0, 1)
 	a.eventTypes = make([]EventType, 0, 1)
 }
 
-func (a *AggregateBase) IncreaseVersion() {
-	a.version++
+func (a *AggregateBase) IncreaseSequence() {
+	a.seq++
+}
+
+func (a *AggregateBase) GetSequence() int64 {
+	return a.seq
 }
 
 func (a *AggregateBase) IsNew() bool {
-	return a.version == 0 && len(a.events) == 0
+	return a.seq == 0
 }
 
-func (a *AggregateBase) GetLastUpdate() int64 {
-	return a.lastUpdate
+func (a *AggregateBase) SetMetadata(metadata interface{}) {
+	a.metadata = metadata
 }
 
-func (a *AggregateBase) SetLastUpdate(lastUpdate int64) *AggregateBase {
-	a.lastUpdate = lastUpdate
-
-	return a
+func (a *AggregateBase) GetMetadata() interface{} {
+	return a.metadata
 }

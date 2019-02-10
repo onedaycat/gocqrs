@@ -19,8 +19,8 @@ func UnFreezeID() {
 	freezeaid = emptyStr
 }
 
-func CreateEventID(aggID string, version int64) string {
-	return aggID + strconv.FormatInt(version, 10)
+func CreateEventID(aggID string, seq int64) string {
+	return aggID + strconv.FormatInt(seq, 10)
 }
 
 func GenerateID() string {

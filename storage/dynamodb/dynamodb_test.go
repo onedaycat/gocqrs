@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
 	"github.com/onedaycat/gocqrs/common/clock"
-	"github.com/onedaycat/gocqrs/example/ecom/stock/domain"
+	"github.com/onedaycat/gocqrs/testdata/domain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +40,7 @@ func TestSaveAndGet(t *testing.T) {
 	db := getDB()
 	db.TruncateTables()
 
-	es := gocqrs.NewEventStore(db, nil)
+	es := gocqrs.NewEventStore(db)
 
 	now1 := time.Now().UTC().Add(time.Second * -10)
 	now2 := time.Now().UTC().Add(time.Second * -5)
@@ -58,12 +58,9 @@ func TestSaveAndGet(t *testing.T) {
 
 	// GetAggregate
 	st2 := domain.NewStockItem()
-	err = es.GetAggregate(st.GetAggregateID(), st2, 0)
+	err = es.GetAggregate(st.GetAggregateID(), st2)
 	require.NoError(t, err)
 	require.Equal(t, st, st2)
-
-	err = es.GetAggregate(st.GetAggregateID(), st2, gocqrs.NewSeq(st2.GetLastUpdate(), st2.GetVersion()))
-	require.Equal(t, gocqrs.ErrNotFound, err)
 
 	// Get
 	st.Add(2)
@@ -74,14 +71,14 @@ func TestSaveAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	st3 := domain.NewStockItem()
-	events, err := es.Get(st.GetAggregateID(), gocqrs.NewSeq(now2.Unix(), 0), st3)
+	events, err := es.GetEvents(st.GetAggregateID(), gocqrs.NewSeq(now2.Unix(), 0), st3)
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
-	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, int64(6), events[0].Version)
-	require.Equal(t, domain.StockItemRemovedEvent, events[1].Type)
-	require.Equal(t, int64(7), events[1].Version)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].EventType)
+	require.Equal(t, int64(6), events[0].Seq)
+	require.Equal(t, domain.StockItemRemovedEvent, events[1].EventType)
+	require.Equal(t, int64(7), events[1].Seq)
 
 	// GetSnapshot
 	st4 := domain.NewStockItem()
@@ -90,37 +87,37 @@ func TestSaveAndGet(t *testing.T) {
 	require.Equal(t, st4, st)
 
 	// GetByEventType
-	events, err = es.GetByEventType(domain.StockItemUpdatedEvent, gocqrs.NewSeq(now2.Unix(), 0))
+	events, err = es.GetEventsByEventType(domain.StockItemUpdatedEvent, gocqrs.NewSeq(now2.Unix(), 0))
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, int64(6), events[0].Version)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].EventType)
+	require.Equal(t, int64(6), events[0].Seq)
 
 	// GetByAggregateType
-	events, err = es.GetByAggregateType(st.GetAggregateType(), gocqrs.NewSeq(now2.Unix(), 0))
+	events, err = es.GetEventsByAggregateType(st.GetAggregateType(), gocqrs.NewSeq(now2.Unix(), 0))
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.True(t, st.IsRemoved())
-	require.Equal(t, domain.StockItemUpdatedEvent, events[0].Type)
-	require.Equal(t, int64(6), events[0].Version)
-	require.Equal(t, domain.StockItemRemovedEvent, events[1].Type)
-	require.Equal(t, int64(7), events[1].Version)
+	require.Equal(t, domain.StockItemUpdatedEvent, events[0].EventType)
+	require.Equal(t, int64(6), events[0].Seq)
+	require.Equal(t, domain.StockItemRemovedEvent, events[1].EventType)
+	require.Equal(t, int64(7), events[1].Seq)
 }
 
 func TestNotFound(t *testing.T) {
 	db := getDB()
 
-	es := gocqrs.NewEventStore(db, nil)
+	es := gocqrs.NewEventStore(db)
 
 	// GetAggregate
 	st := domain.NewStockItem()
 	st.SetAggregateID("1x")
-	err := es.GetAggregate(st.GetAggregateID(), st, 0)
+	err := es.GetAggregate(st.GetAggregateID(), st)
 	require.Equal(t, gocqrs.ErrNotFound, err)
 
 	// Get
 	st3 := domain.NewStockItem()
-	events, err := es.Get(st.GetAggregateID(), 0, st3)
+	events, err := es.GetEvents(st.GetAggregateID(), 0, st3)
 	require.Nil(t, err)
 	require.Nil(t, events)
 
@@ -131,12 +128,12 @@ func TestNotFound(t *testing.T) {
 	require.Nil(t, events)
 
 	// GetByEventType
-	events, err = es.GetByEventType("xxxx", 0)
+	events, err = es.GetEventsByEventType("xxxx", 0)
 	require.Nil(t, err)
 	require.Nil(t, events)
 
 	// GetByAggregateType
-	events, err = es.GetByAggregateType("xxxx", 0)
+	events, err = es.GetEventsByAggregateType("xxxx", 0)
 	require.Nil(t, events)
 	require.Nil(t, err)
 }
@@ -145,7 +142,7 @@ func TestConcurency(t *testing.T) {
 	db := getDB()
 
 	db.TruncateTables()
-	es := gocqrs.NewEventStore(db, nil)
+	es := gocqrs.NewEventStore(db)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)

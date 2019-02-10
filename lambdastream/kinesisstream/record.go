@@ -17,9 +17,20 @@ type Record struct {
 	Kinesis *KinesisPayload `json:"kinesis"`
 }
 
+func (r *Record) add(key, eid string) {
+	r.Kinesis = &KinesisPayload{
+		PartitionKey: key,
+		Data: &Payload{
+			EventMessage: &EventMessage{
+				EventID: eid,
+			},
+		},
+	}
+}
+
 type KinesisPayload struct {
 	PartitionKey string   `json:"partitionKey"`
-	Payload      *Payload `json:"data"`
+	Data         *Payload `json:"data"`
 }
 
 type Payload struct {

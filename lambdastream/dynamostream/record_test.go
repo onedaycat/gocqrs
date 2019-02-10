@@ -2,6 +2,7 @@ package dynamostream
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -98,6 +99,7 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 	require.Equal(t, eventInsert, event.Records[0].EventName)
 	require.Equal(t, eventRemove, event.Records[1].EventName)
 	require.Equal(t, "domain.aggregate", event.Records[0].DynamoDB.NewImage.EventMessage.AggregateType)
+	fmt.Println(event.Records[0].DynamoDB.Keys["Username"])
 
 	pp := &pdata{}
 	err = event.Records[0].DynamoDB.NewImage.EventMessage.Payload.UnmarshalPayload(pp)

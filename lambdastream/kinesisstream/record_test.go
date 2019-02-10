@@ -68,12 +68,12 @@ func TestParseKinesisStreamEvent(t *testing.T) {
 	err := json.Unmarshal(payload, event)
 	require.NoError(t, err)
 	require.Len(t, event.Records, 2)
-	require.Equal(t, "domain.aggregate", event.Records[0].Kinesis.Payload.EventMessage.AggregateType)
-	require.Equal(t, int64(10), event.Records[0].Kinesis.Payload.EventMessage.Version)
-	require.Equal(t, int64(11), event.Records[1].Kinesis.Payload.EventMessage.Version)
+	require.Equal(t, "domain.aggregate", event.Records[0].Kinesis.Data.EventMessage.AggregateType)
+	require.Equal(t, int64(10), event.Records[0].Kinesis.Data.EventMessage.Seq)
+	require.Equal(t, int64(11), event.Records[1].Kinesis.Data.EventMessage.Seq)
 
 	pp := &pdata{}
-	err = event.Records[0].Kinesis.Payload.EventMessage.Payload.UnmarshalPayload(pp)
+	err = event.Records[0].Kinesis.Data.EventMessage.Payload.UnmarshalPayload(pp)
 	require.NoError(t, err)
 	require.Equal(t, &pdata{"1"}, pp)
 }

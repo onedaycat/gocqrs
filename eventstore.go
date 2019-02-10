@@ -1,7 +1,6 @@
 package gocqrs
 
 import (
-	"context"
 	"time"
 
 	"github.com/onedaycat/gocqrs/common/clock"
@@ -17,30 +16,48 @@ const emptyStr = ""
 //go:generate mockery -name=EventStore
 type EventStore interface {
 	SetEventLimit(limit int64)
-	Get(aggID string, seq int64, agg AggregateRoot) ([]*EventMessage, error)
-	GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error)
-	GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error)
-	GetAggregate(aggID string, agg AggregateRoot, seq int64) error
+	SetSnapshotStrategy(strategies SnapshotStategyHandler)
+	GetEvents(aggID string, seq int64, agg AggregateRoot) ([]*EventMessage, error)
+	GetEventsByEventType(eventType EventType, seq int64) ([]*EventMessage, error)
+	GetEventsByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error)
+	GetAggregate(aggID string, agg AggregateRoot) error
 	GetSnapshot(aggID string, agg AggregateRoot) error
 	Save(agg AggregateRoot) error
 }
 
 type eventStore struct {
-	storage  Storage
-	eventBus EventBus
-	limit    int64
+	storage          Storage
+	limit            int64
+	snapshotStrategy SnapshotStategyHandler
 }
 
-func NewEventStore(storage Storage, eventBus EventBus) EventStore {
-	return &eventStore{storage, eventBus, 100}
+func NewEventStore(storage Storage) EventStore {
+	return &eventStore{
+		storage:          storage,
+		limit:            100,
+		snapshotStrategy: LatestEventSanpshot(),
+	}
 }
 
 func (es *eventStore) SetEventLimit(limit int64) {
 	es.limit = limit
 }
 
-func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) error {
-	events, err := es.storage.Get(id, seq, es.limit)
+func (es *eventStore) SetSnapshotStrategy(strategies SnapshotStategyHandler) {
+	es.snapshotStrategy = strategies
+}
+
+func (es *eventStore) GetAggregate(id string, agg AggregateRoot) error {
+	err := es.GetSnapshot(id, agg)
+	if err != nil && err != ErrNotFound {
+		return err
+	}
+
+	return es.getAggregateFromEvent(id, agg, agg.GetSequence())
+}
+
+func (es *eventStore) getAggregateFromEvent(id string, agg AggregateRoot, seq int64) error {
+	events, err := es.storage.GetEvents(id, seq, es.limit)
 	if err != nil {
 		return err
 	}
@@ -54,8 +71,7 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 	lastEvent := events[n-1]
 
 	agg.SetAggregateID(lastEvent.AggregateID)
-	agg.SetVersion(lastEvent.Version)
-	agg.SetLastUpdate(lastEvent.Time)
+	agg.SetSequence(lastEvent.Seq)
 
 	for _, event := range events {
 		if err = agg.Apply(event); err != nil {
@@ -64,7 +80,7 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 	}
 
 	for n >= int(es.limit) {
-		if err = es.GetAggregate(id, agg, lastEvent.Seq); err != nil {
+		if err = es.getAggregateFromEvent(id, agg, lastEvent.Seq); err != nil {
 			if err == ErrNotFound {
 				break
 			}
@@ -79,16 +95,16 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot, seq int64) erro
 	return nil
 }
 
-func (es *eventStore) Get(id string, seq int64, agg AggregateRoot) ([]*EventMessage, error) {
-	return es.storage.Get(id, seq, es.limit)
+func (es *eventStore) GetEvents(id string, seq int64, agg AggregateRoot) ([]*EventMessage, error) {
+	return es.storage.GetEvents(id, seq, es.limit)
 }
 
-func (es *eventStore) GetByEventType(eventType EventType, seq int64) ([]*EventMessage, error) {
-	return es.storage.GetByEventType(eventType, seq, es.limit)
+func (es *eventStore) GetEventsByEventType(eventType EventType, seq int64) ([]*EventMessage, error) {
+	return es.storage.GetEventsByEventType(eventType, seq, es.limit)
 }
 
-func (es *eventStore) GetByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error) {
-	return es.storage.GetByAggregateType(aggType, seq, es.limit)
+func (es *eventStore) GetEventsByAggregateType(aggType AggregateType, seq int64) ([]*EventMessage, error) {
+	return es.storage.GetEventsByAggregateType(aggType, seq, es.limit)
 }
 
 func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
@@ -97,12 +113,8 @@ func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
 		return err
 	}
 
-	agg.SetAggregateID(snapshot.ID)
-	agg.SetVersion(snapshot.Version)
-	agg.SetLastUpdate(snapshot.LastUpdate)
-	if snapshot.IsRemoved {
-		agg.MarkAsRemoved()
-	}
+	agg.SetAggregateID(snapshot.AggregateID)
+	agg.SetSequence(snapshot.Seq)
 
 	if err = snapshot.Payload.UnmarshalPayload(agg); err != nil {
 		return err
@@ -112,12 +124,13 @@ func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
 }
 
 func (es *eventStore) Save(agg AggregateRoot) error {
-	events := agg.GetEvents()
-	if len(events) == 0 {
+	payloads := agg.GetEventPayloads()
+	n := len(payloads)
+	if n == 0 {
 		return nil
 	}
 
-	if len(events) > 9 {
+	if n > 9 {
 		return ErrEventLimitExceed
 	}
 
@@ -125,65 +138,61 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		return ErrNoAggregateID
 	}
 
-	payloads := make([]*EventMessage, len(events))
+	events := make([]*EventMessage, n)
 	now := clock.Now().Unix()
 	aggType := agg.GetAggregateType()
 	eventTypes := agg.GetEventTypes()
 
 	var lastEvent *EventMessage
 
-	for i := 0; i < len(events); i++ {
-		agg.IncreaseVersion()
+	for i := 0; i < n; i++ {
+		agg.IncreaseSequence()
 		aggid := agg.GetAggregateID()
-		version := agg.GetVersion()
-		id := eid.CreateEventID(aggid, version)
-		payloads[i] = &EventMessage{
-			ID:            id,
+		seq := agg.GetSequence()
+		eid := eid.CreateEventID(aggid, seq)
+		metadata := NewPayload(agg.GetMetadata())
+		events[i] = &EventMessage{
+			EventID:       eid,
 			AggregateID:   aggid,
 			AggregateType: aggType,
-			Version:       version,
-			Type:          eventTypes[i],
-			Payload:       NewPayload(events[i]),
+			Seq:           seq,
+			EventType:     eventTypes[i],
+			Payload:       NewPayload(payloads[i]),
 			Time:          now,
-			Seq:           NewSeq(now, version),
+			TimeSeq:       NewSeq(now, seq),
+			Metadata:      metadata,
 		}
 
-		if len(events)-1 == i {
-			lastEvent = payloads[i]
+		if len(payloads)-1 == i {
+			lastEvent = events[i]
 		}
 	}
 
-	snapshot := &Snapshot{
-		ID:            agg.GetAggregateID(),
-		AggregateType: aggType,
-		Version:       agg.GetVersion(),
-		Payload:       NewPayload(agg),
-		LastEvent:     lastEvent,
-		LastUpdate:    lastEvent.Time,
-		IsRemoved:     agg.IsRemoved(),
-	}
-
-	if snapshot.Version == 0 {
+	if lastEvent.Seq == 0 {
 		return ErrInvalidVersionNotAllowed
 	}
 
-	return es.storage.BeginTx(func(ctx context.Context) error {
-
-		if err := es.storage.Save(ctx, payloads, snapshot); err != nil {
-			return err
+	var snapshot *Snapshot
+	if es.snapshotStrategy(agg, events) {
+		snapshot = &Snapshot{
+			AggregateID:   agg.GetAggregateID(),
+			AggregateType: aggType,
+			Payload:       NewPayload(agg),
+			EventID:       lastEvent.EventID,
+			Time:          lastEvent.Time,
+			Seq:           lastEvent.Seq,
+			TimeSeq:       lastEvent.TimeSeq,
+			Metadata:      lastEvent.Metadata,
 		}
+	}
 
-		if es.eventBus != nil {
-			if err := es.eventBus.Publish(payloads); err != nil {
-				return err
-			}
-		}
+	if err := es.storage.Save(events, snapshot); err != nil {
+		return err
+	}
 
-		agg.ClearEvents()
-		agg.SetLastUpdate(lastEvent.Time)
+	agg.ClearEvents()
 
-		return nil
-	})
+	return nil
 }
 
 func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {
@@ -209,14 +218,14 @@ func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {
 	return nil
 }
 
-func NewSeq(time int64, version int64) int64 {
+func NewSeq(time int64, seq int64) int64 {
 	if time < 0 {
 		return 0
 	}
 
-	if version < 0 {
-		version = 0
+	if seq < 0 {
+		seq = 0
 	}
 
-	return (time * 100000) + version
+	return (time * 100000) + seq
 }
