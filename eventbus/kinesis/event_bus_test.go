@@ -16,7 +16,7 @@ func TestPublish(t *testing.T) {
 		Region:      aws.String("ap-southeast-1"),
 	})
 	require.NoError(t, err)
-	k := NewKinesisEventBus(sess)
+	k := NewKinesisEventBus(sess, "eventsourcing")
 
 	events := []*gocqrs.EventMessage{
 		{EventID: "1", AggregateID: "a1"},

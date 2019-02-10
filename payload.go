@@ -66,3 +66,15 @@ func (p *Payload) MarshalDynamoDBAttributeValue(av *dynamodb.AttributeValue) err
 func (p *Payload) MarshalBSON() ([]byte, error) {
 	return bson.Marshal(p.data)
 }
+
+func (p *Payload) MarshalDynamoDBToJSON() error {
+	var err error
+	data := make(map[string]interface{})
+	if err = dynamodbattribute.Unmarshal(p.dynamoData, &data); err != nil {
+		return err
+	}
+
+	p.jsonData, err = json.Marshal(data)
+
+	return err
+}

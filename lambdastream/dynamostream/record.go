@@ -24,10 +24,11 @@ func (p *Payload) UnmarshalJSON(b []byte) error {
 	}
 
 	p.EventMessage = event
-	return nil
+
+	return p.EventMessage.Payload.MarshalDynamoDBToJSON()
 }
 
-const eventInsert = "INSERT"
+const EventInsert = "INSERT"
 const eventRemove = "REMOVE"
 
 type Records = []*Record

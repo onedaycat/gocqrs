@@ -17,6 +17,10 @@ func newGroupConcurrencyManager(nwork int) *groupConcurrencyManager {
 
 func (c *groupConcurrencyManager) Send(records Records, getKey KeyHandler, handler EventMessagesHandler, onError EventMessagesErrorHandler) {
 	for _, record := range records {
+		if record.EventName != EventInsert {
+			continue
+		}
+
 		key := getKey(record)
 		_, ok := c.recordKeys[key]
 		if !ok {

@@ -1,0 +1,28 @@
+service: gocqrs-dynamodb-to-kinesis
+
+package:
+  exclude:
+    - ./**
+  include:
+    - ./bin/**
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: ${file(./setting.yml):region}
+  stage: ${file(./setting.yml):stage}
+  memorySize: 1024
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Resource: '*'
+      Action:
+        - 'dynamodb:*'
+        - 'kinesis:*'
+
+functions:
+  service:
+    handler: bin/app
+    environment:
+      KINESIS_STREAM_NAME: ${file(./setting.yml):kinesisStreamName}
+    events:
+      - stream: ${file(./setting.yml):dynamoStream}

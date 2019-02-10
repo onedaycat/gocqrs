@@ -34,7 +34,7 @@ func (s *DyanmoStream) CreateIteratorHandler(handler EventMessageHandler, onErro
 		var err error
 		var msg *EventMessage
 		for _, record := range event.Records {
-			if record.EventName != eventInsert {
+			if record.EventName != EventInsert {
 				continue
 			}
 
@@ -60,7 +60,7 @@ func (s *DyanmoStream) CreateConcurencyHandler(getKey KeyHandler, handler EventM
 		cm := newConcurrencyManager(len(event.Records))
 
 		for _, record := range event.Records {
-			if record.EventName != eventInsert {
+			if record.EventName != EventInsert {
 				cm.wg.Done()
 				continue
 			}

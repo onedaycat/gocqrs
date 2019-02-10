@@ -70,14 +70,30 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 						 "N":"101"
 					  }
 				   },
-				   "OldImage":{
-					  "Message":{
-						 "S":"This item has changed"
-					  },
-					  "Id":{
-						 "N":"101"
-					  }
-				   },
+				   "NewImage": {
+					"a": {
+						"S": "a1"
+					},
+					"b": {
+						"S": "domain.aggregate"
+					},
+					"v": {
+						"N": "10"
+					},
+					"e": {
+						"S": "domain.aggregate.event"
+					},
+					"s": {
+						"N": "10001"
+					},
+					"p": {
+						"M": {
+							"id": {
+								"S": "1"
+							}
+						}
+					}
+				},
 				   "SequenceNumber":"333",
 				   "SizeBytes":38,
 				   "StreamViewType":"NEW_AND_OLD_IMAGES"
@@ -96,10 +112,12 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 	err := json.Unmarshal(payload, event)
 	require.NoError(t, err)
 	require.Len(t, event.Records, 2)
-	require.Equal(t, eventInsert, event.Records[0].EventName)
+	require.Equal(t, EventInsert, event.Records[0].EventName)
 	require.Equal(t, eventRemove, event.Records[1].EventName)
 	require.Equal(t, "domain.aggregate", event.Records[0].DynamoDB.NewImage.EventMessage.AggregateType)
-	fmt.Println(event.Records[0].DynamoDB.Keys["Username"])
+
+	xx, _ := json.Marshal(event.Records[0].DynamoDB.NewImage.EventMessage)
+	fmt.Println(string(xx))
 
 	pp := &pdata{}
 	err = event.Records[0].DynamoDB.NewImage.EventMessage.Payload.UnmarshalPayload(pp)

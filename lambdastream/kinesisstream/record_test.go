@@ -2,6 +2,7 @@ package kinesisstream
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,9 +13,9 @@ func TestParseKinesisStreamEvent(t *testing.T) {
 	{
 		"a": "a1",
 		"b": "domain.aggregate",
-		"v": 10,
+		"s": 10,
 		"e": "domain.aggregate.event",
-		"s": 10001,
+		"x": 10001,
 		"p": {
 			"id": "1"
 		}
@@ -69,11 +70,13 @@ func TestParseKinesisStreamEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, event.Records, 2)
 	require.Equal(t, "domain.aggregate", event.Records[0].Kinesis.Data.EventMessage.AggregateType)
-	require.Equal(t, int64(10), event.Records[0].Kinesis.Data.EventMessage.Seq)
-	require.Equal(t, int64(11), event.Records[1].Kinesis.Data.EventMessage.Seq)
+	require.Equal(t, "domain.aggregate.event", event.Records[0].Kinesis.Data.EventMessage.EventType)
+	// require.Equal(t, int64(10), event.Records[0].Kinesis.Data.EventMessage.Seq)
+	// require.Equal(t, int64(11), event.Records[1].Kinesis.Data.EventMessage.Seq)
 
 	pp := &pdata{}
 	err = event.Records[0].Kinesis.Data.EventMessage.Payload.UnmarshalPayload(pp)
+	fmt.Println(pp)
 	require.NoError(t, err)
 	require.Equal(t, &pdata{"1"}, pp)
 }

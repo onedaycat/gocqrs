@@ -5,15 +5,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/onedaycat/gocqrs"
-)
-
-var (
-	streamName  = "eventsource"
-	sstreamName = aws.String("eventsource")
 )
 
 var (
@@ -21,12 +15,14 @@ var (
 )
 
 type KinesisEventBus struct {
-	kin *kinesis.Kinesis
+	kin        *kinesis.Kinesis
+	streamName string
 }
 
-func NewKinesisEventBus(sess *session.Session) *KinesisEventBus {
+func NewKinesisEventBus(sess *session.Session, streamName string) *KinesisEventBus {
 	return &KinesisEventBus{
-		kin: kinesis.New(sess),
+		kin:        kinesis.New(sess),
+		streamName: streamName,
 	}
 }
 
@@ -40,7 +36,7 @@ func (k *KinesisEventBus) Publish(events []*gocqrs.EventMessage) error {
 			data, _ := json.Marshal(event)
 			records[index] = &kinesis.PutRecordsRequestEntry{
 				Data:         data,
-				PartitionKey: aws.String(event.AggregateID),
+				PartitionKey: &event.AggregateID,
 			}
 			wg.Done()
 		}(i, events[i])
@@ -49,7 +45,7 @@ func (k *KinesisEventBus) Publish(events []*gocqrs.EventMessage) error {
 
 	out, err := k.kin.PutRecords(&kinesis.PutRecordsInput{
 		Records:    records,
-		StreamName: sstreamName,
+		StreamName: &k.streamName,
 	})
 
 	if out.FailedRecordCount != nil && *out.FailedRecordCount > 0 {
