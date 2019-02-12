@@ -26,3 +26,9 @@ functions:
       KINESIS_STREAM_NAME: ${file(./setting.yml):kinesisStreamName}
     events:
       - stream: ${file(./setting.yml):dynamoStream}
+        batchSize: ${file(./setting.yml):batchSize}
+        # LATEST – Process new records that are added to the stream.
+        # TRIM_HORIZON – Process all records in the stream.
+        # AT_TIMESTAMP – Process records starting from a specific time.
+        startingPosition: ${file(./setting.yml):startingPosition}
+        enabled: ${file(./setting.yml):enableStream}

@@ -3,3 +3,6 @@ region: ap-southeast-1
 stage: dev
 dynamoStream: arn:aws:dynamodb:<region>:<account-id>:table/users/stream/<timestamp>
 kinesisStreamName: kinesis-stream
+batchSize: 100
+startingPosition: LATEST
+enableStream: true
