@@ -4,6 +4,7 @@ type EventType = string
 
 type EventMessage struct {
 	EventID       string        `json:"i" bson:"_id"`
+	PartitionKey  string        `json:"k" bson:"k"`
 	AggregateID   string        `json:"a" bson:"a"`
 	AggregateType AggregateType `json:"b" bson:"b"`
 	EventType     EventType     `json:"e" bson:"e"`

@@ -18,6 +18,10 @@ func NewStockItem() *StockItem {
 	}
 }
 
+func (st *StockItem) GetPartitionKey() string {
+	return st.GetAggregateID()
+}
+
 func (st *StockItem) Create(productID string, qty Qty) {
 	st.ProductID = productID
 	st.Qty = qty

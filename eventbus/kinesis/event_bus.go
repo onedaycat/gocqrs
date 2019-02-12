@@ -36,7 +36,7 @@ func (k *KinesisEventBus) Publish(events []*gocqrs.EventMessage) error {
 			data, _ := json.Marshal(event)
 			records[index] = &kinesis.PutRecordsRequestEntry{
 				Data:         data,
-				PartitionKey: &event.AggregateID,
+				PartitionKey: &event.PartitionKey,
 			}
 			wg.Done()
 		}(i, events[i])

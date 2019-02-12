@@ -21,6 +21,7 @@ type AggregateRoot interface {
 	ClearEvents()
 	IsNew() bool
 	Publish(eventType EventType, event interface{})
+	GetPartitionKey() string
 }
 
 type AggregateBase struct {
