@@ -1,4 +1,4 @@
-service: gocqrs-dynamodb-to-kinesis
+service: ${file(./setting.yml):service}
 
 package:
   exclude:
