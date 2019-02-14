@@ -1,11 +1,15 @@
 package gocqrs
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/onedaycat/gocqrs/common/clock"
 	"github.com/onedaycat/gocqrs/common/eid"
 )
+
+//go:generate mockery -name=EventStore
+//go:generate protoc --gofast_out=. event.proto
 
 // RetryHandler if return bool is true is allow retry,
 // if return bool is false no retry
@@ -13,7 +17,8 @@ type RetryHandler func() error
 
 const emptyStr = ""
 
-//go:generate mockery -name=EventStore
+type EventType = string
+
 type EventStore interface {
 	SetEventLimit(limit int64)
 	SetSnapshotStrategy(strategies SnapshotStategyHandler)
@@ -53,11 +58,13 @@ func (es *eventStore) GetAggregate(id string, agg AggregateRoot) error {
 		return err
 	}
 
-	return es.getAggregateFromEvent(id, agg, agg.GetSequence())
+	hashKey := es.createHashKey(id, agg.GetAggregateType())
+
+	return es.getAggregateFromEvent(id, hashKey, agg, agg.GetSequence())
 }
 
-func (es *eventStore) getAggregateFromEvent(id string, agg AggregateRoot, seq int64) error {
-	events, err := es.storage.GetEvents(id, seq, es.limit)
+func (es *eventStore) getAggregateFromEvent(id, hashKey string, agg AggregateRoot, seq int64) error {
+	events, err := es.storage.GetEvents(id, hashKey, seq, es.limit)
 	if err != nil {
 		return err
 	}
@@ -80,7 +87,7 @@ func (es *eventStore) getAggregateFromEvent(id string, agg AggregateRoot, seq in
 	}
 
 	for n >= int(es.limit) {
-		if err = es.getAggregateFromEvent(id, agg, lastEvent.Seq); err != nil {
+		if err = es.getAggregateFromEvent(id, hashKey, agg, lastEvent.Seq); err != nil {
 			if err == ErrNotFound {
 				break
 			}
@@ -96,7 +103,8 @@ func (es *eventStore) getAggregateFromEvent(id string, agg AggregateRoot, seq in
 }
 
 func (es *eventStore) GetEvents(id string, seq int64, agg AggregateRoot) ([]*EventMessage, error) {
-	return es.storage.GetEvents(id, seq, es.limit)
+	hashKey := es.createHashKey(id, agg.GetAggregateType())
+	return es.storage.GetEvents(id, hashKey, seq, es.limit)
 }
 
 func (es *eventStore) GetEventsByEventType(eventType EventType, seq int64) ([]*EventMessage, error) {
@@ -108,7 +116,8 @@ func (es *eventStore) GetEventsByAggregateType(aggType AggregateType, seq int64)
 }
 
 func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
-	snapshot, err := es.storage.GetSnapshot(id)
+	hashKey := es.createHashKey(id, agg.GetAggregateType())
+	snapshot, err := es.storage.GetSnapshot(id, hashKey)
 	if err != nil {
 		return err
 	}
@@ -116,7 +125,7 @@ func (es *eventStore) GetSnapshot(id string, agg AggregateRoot) error {
 	agg.SetAggregateID(snapshot.AggregateID)
 	agg.SetSequence(snapshot.Seq)
 
-	if err = snapshot.Payload.UnmarshalPayload(agg); err != nil {
+	if err = json.Unmarshal(snapshot.Payload, agg); err != nil {
 		return err
 	}
 
@@ -150,14 +159,22 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 		aggid := agg.GetAggregateID()
 		seq := agg.GetSequence()
 		eid := eid.CreateEventID(aggid, seq)
-		metadata := NewPayload(agg.GetMetadata())
+		metadata := agg.GetMetadata()
+		hashKey := es.createHashKey(aggid, aggType)
+		payload, err := json.Marshal(payloads[i])
+		if err != nil {
+			return err
+		}
+
 		events[i] = &EventMessage{
 			EventID:       eid,
+			EventType:     eventTypes[i],
 			AggregateID:   aggid,
 			AggregateType: aggType,
+			PartitionKey:  agg.GetPartitionKey(),
+			HashKey:       hashKey,
 			Seq:           seq,
-			EventType:     eventTypes[i],
-			Payload:       NewPayload(payloads[i]),
+			Payload:       payload,
 			Time:          now,
 			TimeSeq:       NewSeq(now, seq),
 			Metadata:      metadata,
@@ -174,10 +191,16 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 
 	var snapshot *Snapshot
 	if es.snapshotStrategy(agg, events) {
+		aggPayload, err := json.Marshal(agg)
+		if err != nil {
+			return err
+		}
+
 		snapshot = &Snapshot{
 			AggregateID:   agg.GetAggregateID(),
 			AggregateType: aggType,
-			Payload:       NewPayload(agg),
+			HashKey:       lastEvent.HashKey,
+			Payload:       aggPayload,
 			EventID:       lastEvent.EventID,
 			Time:          lastEvent.Time,
 			Seq:           lastEvent.Seq,
@@ -193,6 +216,10 @@ func (es *eventStore) Save(agg AggregateRoot) error {
 	agg.ClearEvents()
 
 	return nil
+}
+
+func (es *eventStore) createHashKey(aggid, aggType string) string {
+	return aggid + aggType
 }
 
 func WithRetry(numberRetry int, delay time.Duration, fn RetryHandler) error {

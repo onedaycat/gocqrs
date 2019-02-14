@@ -3,6 +3,7 @@ package domain
 const StockItemCreatedEvent = "domain.subdomain.aggregate.StockItemCreated"
 
 type StockItemCreated struct {
+	ID        string `json:"id"`
 	ProductID string `json:"productID"`
-	Qty       Qty    `json:"qty"`
+	Qty       int    `json:"qty"`
 }

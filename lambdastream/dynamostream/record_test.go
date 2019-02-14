@@ -1,6 +1,7 @@
 package dynamostream
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -9,7 +10,14 @@ import (
 )
 
 func TestParseDynamoDBStreamEvent(t *testing.T) {
-	payload := []byte(`
+	p, err := json.Marshal(map[string]interface{}{
+		"id": "1",
+	})
+	require.NoError(t, err)
+
+	p64 := base64.StdEncoding.EncodeToString(p)
+
+	payload := fmt.Sprintf(`
 	{
 		"Records": [
 			{
@@ -45,11 +53,7 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 							"N": "10001"
 						},
 						"p": {
-							"M": {
-								"id": {
-									"S": "1"
-								}
-							}
+							"B": "%s"
 						}
 					},
 					"SequenceNumber": "13021600000000001596893679",
@@ -87,29 +91,24 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 						"N": "10001"
 					},
 					"p": {
-						"M": {
-							"id": {
-								"S": "1"
-							}
-						}
+						"B": "%s"
 					}
 				},
 				   "SequenceNumber":"333",
 				   "SizeBytes":38,
-				   "StreamViewType":"NEW_AND_OLD_IMAGES"
+				   "StreamViewType":"NEW_IMAGES"
 				},
 				"eventSourceARN":"stream-ARN"
 			 }
 		]
-	}
-	`)
+	}`, p64, p64)
 
 	type pdata struct {
 		ID string `json:"id"`
 	}
 
 	event := &DynamoDBStreamEvent{}
-	err := json.Unmarshal(payload, event)
+	err = json.Unmarshal([]byte(payload), event)
 	require.NoError(t, err)
 	require.Len(t, event.Records, 2)
 	require.Equal(t, EventInsert, event.Records[0].EventName)
@@ -120,7 +119,8 @@ func TestParseDynamoDBStreamEvent(t *testing.T) {
 	fmt.Println(string(xx))
 
 	pp := &pdata{}
-	err = event.Records[0].DynamoDB.NewImage.EventMessage.Payload.UnmarshalPayload(pp)
+	err = json.Unmarshal(event.Records[0].DynamoDB.NewImage.EventMessage.Payload, pp)
 	require.NoError(t, err)
+	fmt.Println(pp)
 	require.Equal(t, &pdata{"1"}, pp)
 }

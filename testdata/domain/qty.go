@@ -20,3 +20,7 @@ func (qty Qty) Sub(amount Qty) (Qty, error) {
 
 	return newqty, nil
 }
+
+func (qty Qty) ToInt() int {
+	return int(qty)
+}

@@ -10,8 +10,22 @@ type EventStore struct {
 	mock.Mock
 }
 
-// Get provides a mock function with given fields: aggID, seq, agg
-func (_m *EventStore) Get(aggID string, seq int64, agg gocqrs.AggregateRoot) ([]*gocqrs.EventMessage, error) {
+// GetAggregate provides a mock function with given fields: aggID, agg
+func (_m *EventStore) GetAggregate(aggID string, agg gocqrs.AggregateRoot) error {
+	ret := _m.Called(aggID, agg)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, gocqrs.AggregateRoot) error); ok {
+		r0 = rf(aggID, agg)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// GetEvents provides a mock function with given fields: aggID, seq, agg
+func (_m *EventStore) GetEvents(aggID string, seq int64, agg gocqrs.AggregateRoot) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(aggID, seq, agg)
 
 	var r0 []*gocqrs.EventMessage
@@ -33,22 +47,8 @@ func (_m *EventStore) Get(aggID string, seq int64, agg gocqrs.AggregateRoot) ([]
 	return r0, r1
 }
 
-// GetAggregate provides a mock function with given fields: aggID, agg, seq
-func (_m *EventStore) GetAggregate(aggID string, agg gocqrs.AggregateRoot, seq int64) error {
-	ret := _m.Called(aggID, agg, seq)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(string, gocqrs.AggregateRoot, int64) error); ok {
-		r0 = rf(aggID, agg, seq)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// GetByAggregateType provides a mock function with given fields: aggType, seq
-func (_m *EventStore) GetByAggregateType(aggType string, seq int64) ([]*gocqrs.EventMessage, error) {
+// GetEventsByAggregateType provides a mock function with given fields: aggType, seq
+func (_m *EventStore) GetEventsByAggregateType(aggType string, seq int64) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(aggType, seq)
 
 	var r0 []*gocqrs.EventMessage
@@ -70,8 +70,8 @@ func (_m *EventStore) GetByAggregateType(aggType string, seq int64) ([]*gocqrs.E
 	return r0, r1
 }
 
-// GetByEventType provides a mock function with given fields: eventType, seq
-func (_m *EventStore) GetByEventType(eventType string, seq int64) ([]*gocqrs.EventMessage, error) {
+// GetEventsByEventType provides a mock function with given fields: eventType, seq
+func (_m *EventStore) GetEventsByEventType(eventType string, seq int64) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(eventType, seq)
 
 	var r0 []*gocqrs.EventMessage
@@ -124,4 +124,9 @@ func (_m *EventStore) Save(agg gocqrs.AggregateRoot) error {
 // SetEventLimit provides a mock function with given fields: limit
 func (_m *EventStore) SetEventLimit(limit int64) {
 	_m.Called(limit)
+}
+
+// SetSnapshotStrategy provides a mock function with given fields: strategies
+func (_m *EventStore) SetSnapshotStrategy(strategies gocqrs.SnapshotStategyHandler) {
+	_m.Called(strategies)
 }

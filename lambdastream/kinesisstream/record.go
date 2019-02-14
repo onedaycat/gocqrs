@@ -2,7 +2,6 @@ package kinesisstream
 
 import (
 	"encoding/base64"
-	"encoding/json"
 
 	"github.com/onedaycat/gocqrs"
 )
@@ -49,11 +48,10 @@ func (p *Payload) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	event := &gocqrs.EventMessage{}
-	if err = json.Unmarshal(bdata, event); err != nil {
+	p.EventMessage = &gocqrs.EventMessage{}
+	if err = p.EventMessage.Unmarshal(bdata); err != nil {
 		return err
 	}
 
-	p.EventMessage = event
 	return nil
 }

@@ -1,14 +1,17 @@
 package gocqrs
 
+import "encoding/json"
+
 type Snapshot struct {
-	AggregateID   string        `json:"a" bson:"_id"`
-	AggregateType AggregateType `json:"b" bson:"b"`
-	Payload       *Payload      `json:"p" bson:"p"`
-	EventID       string        `json:"i" bson:"i"`
-	Time          int64         `json:"t" bson:"t"`
-	Seq           int64         `json:"s" bson:"s"`
-	TimeSeq       int64         `json:"x" bson:"x"`
-	Metadata      *Payload      `json:"m" bson:"m"`
+	AggregateID   string          `json:"a" bson:"_id"`
+	AggregateType AggregateType   `json:"b" bson:"b"`
+	HashKey       string          `json:"h" bson:"h"`
+	Payload       json.RawMessage `json:"p" bson:"p"`
+	EventID       string          `json:"i" bson:"i"`
+	Time          int64           `json:"t" bson:"t"`
+	Seq           int64           `json:"s" bson:"s"`
+	TimeSeq       int64           `json:"x" bson:"x"`
+	Metadata      *Metadata       `json:"m" bson:"m"`
 }
 
 type SnapshotStategyHandler func(agg AggregateRoot, events []*EventMessage) bool

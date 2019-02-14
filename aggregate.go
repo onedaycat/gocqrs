@@ -1,20 +1,16 @@
 package gocqrs
 
-import (
-	"github.com/onedaycat/gocqrs/common/eid"
-)
-
 type AggregateType = string
 
 type AggregateRoot interface {
 	Apply(payload *EventMessage) error
 	GetAggregateID() string
-	SetAggregateID(id string) *AggregateBase
+	SetAggregateID(id string)
 	GetAggregateType() string
 	SetSequence(seq int64) *AggregateBase
 	GetSequence() int64
-	SetMetadata(metadata interface{})
-	GetMetadata() interface{}
+	SetMetadata(metadata *Metadata)
+	GetMetadata() *Metadata
 	IncreaseSequence()
 	GetEventPayloads() []interface{}
 	GetEventTypes() []EventType
@@ -25,30 +21,19 @@ type AggregateRoot interface {
 }
 
 type AggregateBase struct {
-	id            string
 	eventPayloads []interface{}
 	eventTypes    []EventType
 	seq           int64
-	metadata      interface{}
+	metadata      *Metadata
 }
 
 // InitAggregate if id is empty, id will be generated
 func InitAggregate() *AggregateBase {
 	return &AggregateBase{
-		id:            eid.GenerateID(),
 		eventPayloads: make([]interface{}, 0, 1),
 		eventTypes:    make([]EventType, 0, 1),
 		seq:           0,
 	}
-}
-
-func (a *AggregateBase) GetAggregateID() string {
-	return a.id
-}
-
-func (a *AggregateBase) SetAggregateID(id string) *AggregateBase {
-	a.id = id
-	return a
 }
 
 func (a *AggregateBase) Publish(eventType EventType, event interface{}) {
@@ -87,10 +72,10 @@ func (a *AggregateBase) IsNew() bool {
 	return a.seq == 0
 }
 
-func (a *AggregateBase) SetMetadata(metadata interface{}) {
+func (a *AggregateBase) SetMetadata(metadata *Metadata) {
 	a.metadata = metadata
 }
 
-func (a *AggregateBase) GetMetadata() interface{} {
+func (a *AggregateBase) GetMetadata() *Metadata {
 	return a.metadata
 }

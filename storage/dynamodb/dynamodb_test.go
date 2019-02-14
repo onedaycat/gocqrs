@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
 	"github.com/onedaycat/gocqrs/common/clock"
+	"github.com/onedaycat/gocqrs/common/eid"
 	"github.com/onedaycat/gocqrs/testdata/domain"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +27,7 @@ func getDB() *DynamoDBEventStore {
 			panic(err)
 		}
 
-		_db = New(sess, "eventstore", "eventsnapshot")
+		_db = New(sess, "test-eventstore", "test-eventsnapshot")
 		err = _db.CreateSchema(true)
 		if err != nil {
 			panic(err)
@@ -46,7 +47,8 @@ func TestSaveAndGet(t *testing.T) {
 	now2 := time.Now().UTC().Add(time.Second * -5)
 
 	st := domain.NewStockItem()
-	st.Create("1", 0)
+	id := eid.GenerateID()
+	st.Create(id, "1", 0)
 	st.Add(10)
 	st.Sub(5)
 	st.Add(2)
@@ -151,8 +153,7 @@ func TestConcurency(t *testing.T) {
 	var err2 error
 	go func() {
 		st := domain.NewStockItem()
-		st.SetAggregateID("a1")
-		st.Create("1", 0)
+		st.Create("a1", "1", 0)
 		st.Add(10)
 		st.Sub(5)
 		st.Add(2)
@@ -165,8 +166,7 @@ func TestConcurency(t *testing.T) {
 
 	go func() {
 		st := domain.NewStockItem()
-		st.SetAggregateID("a1")
-		st.Create("1", 0)
+		st.Create("a1", "1", 0)
 		st.Remove()
 
 		err2 = es.Save(st)

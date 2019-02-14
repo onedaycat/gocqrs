@@ -2,39 +2,52 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
+	"sync"
+
+	"github.com/aws/aws-sdk-go/service/kinesis"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/onedaycat/gocqrs"
-	"github.com/onedaycat/gocqrs/eventbus/kinesis"
 	"github.com/onedaycat/gocqrs/lambdastream/dynamostream"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	ks *kinesis.KinesisEventBus
+	ks         *kinesis.Kinesis
+	streamName = os.Getenv("KINESIS_STREAM_NAME")
 )
 
 func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) error {
-	events := make([]*gocqrs.EventMessage, 0, len(stream.Records))
-	for _, record := range stream.Records {
-		if record.EventName == dynamostream.EventInsert {
-			events = append(events, record.DynamoDB.NewImage.EventMessage)
-		}
+	n := len(stream.Records)
+	dataList := make([]*kinesis.PutRecordsRequestEntry, n)
+	wg := sync.WaitGroup{}
+	wg.Add(n)
+
+	for i := 0; i < n; i++ {
+		go func(index int, event *gocqrs.EventMessage) {
+			data, _ := event.Marshal()
+			dataList[index] = &kinesis.PutRecordsRequestEntry{
+				Data:         data,
+				PartitionKey: &event.PartitionKey,
+			}
+			wg.Done()
+		}(i, stream.Records[i].DynamoDB.NewImage.EventMessage)
+	}
+	wg.Wait()
+
+	out, err := ks.PutRecords(&kinesis.PutRecordsInput{
+		Records:    dataList,
+		StreamName: &streamName,
+	})
+
+	if out.FailedRecordCount != nil && *out.FailedRecordCount > 0 {
+		return errors.New("One or more events published failed")
 	}
 
-	if len(events) == 0 {
-		return nil
-	}
-
-	err := ks.Publish(events)
-	if err != nil {
-		log.Error().Msg("Publish error: " + err.Error())
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func init() {
@@ -44,7 +57,7 @@ func init() {
 		log.Panic().Msg("AWS Session error: " + err.Error())
 	}
 
-	ks = kinesis.NewKinesisEventBus(sess, os.Getenv("KINESIS_STREAM_NAME"))
+	ks = kinesis.New(sess)
 	log.Info().Msg("Done init")
 }
 

@@ -24,8 +24,9 @@ func (p *Payload) UnmarshalJSON(b []byte) error {
 	}
 
 	p.EventMessage = event
+	p.EventMessage.Payload = data["p"].B
 
-	return p.EventMessage.Payload.MarshalDynamoDBToJSON()
+	return nil
 }
 
 const EventInsert = "INSERT"

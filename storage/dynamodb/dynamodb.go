@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	aggidK               = "a"
+	hashKeyK             = "h"
 	emptyStr             = ""
 	seqKV                = ":x"
-	getKV                = ":a"
+	getKV                = ":h"
 	getByEventTypeKV     = ":et"
 	getByAggregateTypeKV = ":b"
 )
@@ -26,8 +26,8 @@ var (
 	bSIndex                        = aws.String("b-x-index")
 	saveCond                       = aws.String("attribute_not_exists(x)")
 	saveSnapCond                   = aws.String("attribute_not_exists(x) or x < :x")
-	getCond                        = aws.String("a=:a")
-	getCondWithTime                = aws.String("a=:a and x > :x")
+	getCond                        = aws.String("h=:h")
+	getCondWithTime                = aws.String("h=:h and x > :x")
 	getByEventTypeCond             = aws.String("e=:et")
 	getByEventTypeWithTimeCond     = aws.String("e=:et and x > :x")
 	getByAggregateTypeCond         = aws.String("b=:b")
@@ -71,7 +71,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 		keyStores[i] = &dynamodb.WriteRequest{
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
-					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
+					"h": &dynamodb.AttributeValue{S: output.Items[i]["h"].S},
 					"x": &dynamodb.AttributeValue{N: output.Items[i]["x"].N},
 				},
 			},
@@ -100,7 +100,7 @@ func (d *DynamoDBEventStore) TruncateTables() {
 		keyStores[i] = &dynamodb.WriteRequest{
 			DeleteRequest: &dynamodb.DeleteRequest{
 				Key: map[string]*dynamodb.AttributeValue{
-					"a": &dynamodb.AttributeValue{S: output.Items[i]["a"].S},
+					"h": &dynamodb.AttributeValue{S: output.Items[i]["h"].S},
 				},
 			},
 		}
@@ -125,7 +125,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		TableName: &d.eventstoreTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("a"),
+				AttributeName: aws.String("h"),
 				AttributeType: aws.String("S"),
 			},
 			{
@@ -143,7 +143,7 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("a"),
+				AttributeName: aws.String("h"),
 				KeyType:       aws.String("HASH"),
 			},
 			{
@@ -199,13 +199,13 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 		TableName:   &d.snapshotTable,
 		AttributeDefinitions: []*dynamodb.AttributeDefinition{
 			{
-				AttributeName: aws.String("a"),
+				AttributeName: aws.String("h"),
 				AttributeType: aws.String("S"),
 			},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
-				AttributeName: aws.String("a"),
+				AttributeName: aws.String("h"),
 				KeyType:       aws.String("HASH"),
 			},
 		},
@@ -221,10 +221,10 @@ func (d *DynamoDBEventStore) CreateSchema(enableStream bool) error {
 	return nil
 }
 
-func (d *DynamoDBEventStore) GetEvents(aggID string, seq, limit int64) ([]*gocqrs.EventMessage, error) {
+func (d *DynamoDBEventStore) GetEvents(aggID, hashKey string, seq, limit int64) ([]*gocqrs.EventMessage, error) {
 	keyCond := getCond
 	exValue := map[string]*dynamodb.AttributeValue{
-		getKV: &dynamodb.AttributeValue{S: &aggID},
+		getKV: &dynamodb.AttributeValue{S: &hashKey},
 	}
 
 	if seq > 0 {
@@ -328,12 +328,12 @@ func (d *DynamoDBEventStore) GetEventsByAggregateType(aggType gocqrs.AggregateTy
 	return snapshots, nil
 }
 
-func (d *DynamoDBEventStore) GetSnapshot(aggID string) (*gocqrs.Snapshot, error) {
+func (d *DynamoDBEventStore) GetSnapshot(aggID, hashKey string) (*gocqrs.Snapshot, error) {
 	output, err := d.db.GetItem(&dynamodb.GetItemInput{
 		TableName:      &d.snapshotTable,
 		ConsistentRead: falseStrongRead,
 		Key: map[string]*dynamodb.AttributeValue{
-			aggidK: &dynamodb.AttributeValue{S: &aggID},
+			hashKeyK: &dynamodb.AttributeValue{S: &hashKey},
 		},
 	})
 	if err != nil {

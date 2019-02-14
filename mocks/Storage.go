@@ -2,7 +2,6 @@
 
 package mocks
 
-import context "context"
 import gocqrs "github.com/onedaycat/gocqrs"
 import mock "github.com/stretchr/testify/mock"
 
@@ -11,22 +10,8 @@ type Storage struct {
 	mock.Mock
 }
 
-// BeginTx provides a mock function with given fields: fn
-func (_m *Storage) BeginTx(fn func(context.Context) error) error {
-	ret := _m.Called(fn)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(func(context.Context) error) error); ok {
-		r0 = rf(fn)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// Get provides a mock function with given fields: aggID, seq, limit
-func (_m *Storage) Get(aggID string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+// GetEvents provides a mock function with given fields: aggID, seq, limit
+func (_m *Storage) GetEvents(aggID string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(aggID, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
@@ -48,8 +33,8 @@ func (_m *Storage) Get(aggID string, seq int64, limit int64) ([]*gocqrs.EventMes
 	return r0, r1
 }
 
-// GetByAggregateType provides a mock function with given fields: aggType, seq, limit
-func (_m *Storage) GetByAggregateType(aggType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+// GetEventsByAggregateType provides a mock function with given fields: aggType, seq, limit
+func (_m *Storage) GetEventsByAggregateType(aggType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(aggType, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
@@ -71,8 +56,8 @@ func (_m *Storage) GetByAggregateType(aggType string, seq int64, limit int64) ([
 	return r0, r1
 }
 
-// GetByEventType provides a mock function with given fields: eventType, seq, limit
-func (_m *Storage) GetByEventType(eventType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
+// GetEventsByEventType provides a mock function with given fields: eventType, seq, limit
+func (_m *Storage) GetEventsByEventType(eventType string, seq int64, limit int64) ([]*gocqrs.EventMessage, error) {
 	ret := _m.Called(eventType, seq, limit)
 
 	var r0 []*gocqrs.EventMessage
@@ -117,13 +102,13 @@ func (_m *Storage) GetSnapshot(aggID string) (*gocqrs.Snapshot, error) {
 	return r0, r1
 }
 
-// Save provides a mock function with given fields: ctx, payloads, snapshot
-func (_m *Storage) Save(ctx context.Context, payloads []*gocqrs.EventMessage, snapshot *gocqrs.Snapshot) error {
-	ret := _m.Called(ctx, payloads, snapshot)
+// Save provides a mock function with given fields: events, snapshot
+func (_m *Storage) Save(events []*gocqrs.EventMessage, snapshot *gocqrs.Snapshot) error {
+	ret := _m.Called(events, snapshot)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, []*gocqrs.EventMessage, *gocqrs.Snapshot) error); ok {
-		r0 = rf(ctx, payloads, snapshot)
+	if rf, ok := ret.Get(0).(func([]*gocqrs.EventMessage, *gocqrs.Snapshot) error); ok {
+		r0 = rf(events, snapshot)
 	} else {
 		r0 = ret.Error(0)
 	}
