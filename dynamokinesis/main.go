@@ -22,21 +22,30 @@ var (
 
 func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) error {
 	n := len(stream.Records)
-	dataList := make([]*kinesis.PutRecordsRequestEntry, n)
+	dataList := make([]*kinesis.PutRecordsRequestEntry, 0, n)
 	wg := sync.WaitGroup{}
 	wg.Add(n)
 
 	for i := 0; i < n; i++ {
+		if stream.Records[i].DynamoDB.NewImage == nil {
+			wg.Done()
+			continue
+		}
+
 		go func(index int, event *gocqrs.EventMessage) {
 			data, _ := event.Marshal()
-			dataList[index] = &kinesis.PutRecordsRequestEntry{
+			dataList = append(dataList, &kinesis.PutRecordsRequestEntry{
 				Data:         data,
 				PartitionKey: &event.PartitionKey,
-			}
+			})
 			wg.Done()
 		}(i, stream.Records[i].DynamoDB.NewImage.EventMessage)
 	}
 	wg.Wait()
+
+	if len(dataList) == 0 {
+		return nil
+	}
 
 	out, err := ks.PutRecords(&kinesis.PutRecordsInput{
 		Records:    dataList,
@@ -55,17 +64,14 @@ func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) erro
 }
 
 func init() {
-	log.Info().Msg("Start init")
 	sess, err := session.NewSession()
 	if err != nil {
 		log.Panic().Msg("AWS Session error: " + err.Error())
 	}
 
 	ks = kinesis.New(sess)
-	log.Info().Msg("Done init")
 }
 
 func main() {
-	log.Info().Msg("Start Dynamodb to Kinesis")
 	lambda.Start(handler)
 }
