@@ -43,11 +43,15 @@ func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) erro
 		StreamName: &streamName,
 	})
 
+	if err != nil {
+		return err
+	}
+
 	if out.FailedRecordCount != nil && *out.FailedRecordCount > 0 {
 		return errors.New("One or more events published failed")
 	}
 
-	return err
+	return nil
 }
 
 func init() {
