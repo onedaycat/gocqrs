@@ -11,7 +11,6 @@ provider:
   runtime: go1.x
   region: ${file(./setting.yml):region}
   stage: ${file(./setting.yml):stage}
-  memorySize: 1024
   iamRoleStatements:
     - Effect: 'Allow'
       Resource: '*'
@@ -24,11 +23,12 @@ functions:
     handler: bin/app
     environment:
       KINESIS_STREAM_NAME: ${file(./setting.yml):kinesisStreamName}
+    memorySize: ${file(./setting.yml):memorySize}
+    timeout: ${file(./setting.yml):timeout}
     events:
-      - stream: ${file(./setting.yml):dynamoStream}
-        batchSize: ${file(./setting.yml):batchSize}
-        # LATEST – Process new records that are added to the stream.
-        # TRIM_HORIZON – Process all records in the stream.
-        # AT_TIMESTAMP – Process records starting from a specific time.
-        startingPosition: ${file(./setting.yml):startingPosition}
-        enabled: ${file(./setting.yml):enableStream}
+      - stream:
+          type: dynamodb
+          arn: ${file(./setting.yml):dynamoStream}
+          batchSize: ${file(./setting.yml):batchSize}
+          startingPosition: ${file(./setting.yml):startingPosition}
+          enabled: ${file(./setting.yml):enableStream}

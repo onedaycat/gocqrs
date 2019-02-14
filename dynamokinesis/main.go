@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
+	"runtime"
 	"sync"
-
-	"github.com/aws/aws-sdk-go/service/kinesis"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/onedaycat/gocqrs"
 	"github.com/onedaycat/gocqrs/lambdastream/dynamostream"
 	"github.com/rs/zerolog/log"
@@ -18,37 +19,60 @@ import (
 var (
 	ks         *kinesis.Kinesis
 	streamName = os.Getenv("KINESIS_STREAM_NAME")
+	numCore    = runtime.NumCPU() * 2
 )
+
+func work(records dynamostream.Records, result *[]*kinesis.PutRecordsRequestEntry, wg *sync.WaitGroup) {
+	var event *gocqrs.EventMessage
+	for i := 0; i < len(records); i++ {
+		if records[i].DynamoDB.NewImage == nil {
+			continue
+		}
+		event = records[i].DynamoDB.NewImage.EventMessage
+
+		data, _ := event.Marshal()
+		*result = append(*result, &kinesis.PutRecordsRequestEntry{
+			Data:         data,
+			PartitionKey: &event.PartitionKey,
+		})
+	}
+
+	wg.Done()
+}
 
 func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) error {
 	n := len(stream.Records)
-	dataList := make([]*kinesis.PutRecordsRequestEntry, 0, n)
-	wg := sync.WaitGroup{}
-	wg.Add(n)
+	if n < numCore {
+		numCore = n
+	}
 
-	for i := 0; i < n; i++ {
-		if stream.Records[i].DynamoDB.NewImage == nil {
-			wg.Done()
-			continue
+	wg := &sync.WaitGroup{}
+	wg.Add(numCore)
+	numOfWork := int(math.Ceil(float64(n) / float64(numCore)))
+	dataSets := make([][]*kinesis.PutRecordsRequestEntry, numCore)
+
+	for i := 0; i < numCore; i++ {
+		dataSets[i] = make([]*kinesis.PutRecordsRequestEntry, 0, numOfWork)
+		if (i+1)*numOfWork > n {
+			go work(stream.Records[i*numOfWork:n], &dataSets[i], wg)
+			break
 		}
-
-		go func(index int, event *gocqrs.EventMessage) {
-			data, _ := event.Marshal()
-			dataList = append(dataList, &kinesis.PutRecordsRequestEntry{
-				Data:         data,
-				PartitionKey: &event.PartitionKey,
-			})
-			wg.Done()
-		}(i, stream.Records[i].DynamoDB.NewImage.EventMessage)
+		go work(stream.Records[i*numOfWork:(i+1)*numOfWork], &dataSets[i], wg)
 	}
 	wg.Wait()
 
-	if len(dataList) == 0 {
+	result := make([]*kinesis.PutRecordsRequestEntry, 0, n)
+
+	for i := 0; i < numCore; i++ {
+		result = append(result, dataSets[i]...)
+	}
+
+	if len(result) == 0 {
 		return nil
 	}
 
 	out, err := ks.PutRecords(&kinesis.PutRecordsInput{
-		Records:    dataList,
+		Records:    result,
 		StreamName: &streamName,
 	})
 
@@ -70,6 +94,7 @@ func init() {
 	}
 
 	ks = kinesis.New(sess)
+	log.Info().Int("num core", numCore).Msg("Init")
 }
 
 func main() {
