@@ -43,7 +43,7 @@ func work(records dynamostream.Records, result *[]*kinesis.PutRecordsRequestEntr
 func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) error {
 	n := len(stream.Records)
 	if n < numCore {
-		numCore = n
+		return handlerIterator(ctx, stream)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -87,6 +87,44 @@ func handler(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) erro
 	return nil
 }
 
+func handlerIterator(ctx context.Context, stream *dynamostream.DynamoDBStreamEvent) error {
+	n := len(stream.Records)
+	result := make([]*kinesis.PutRecordsRequestEntry, 0, n)
+
+	var event *gocqrs.EventMessage
+	for i := 0; i < n; i++ {
+		if stream.Records[i].DynamoDB.NewImage == nil {
+			continue
+		}
+		event = stream.Records[i].DynamoDB.NewImage.EventMessage
+
+		data, _ := event.Marshal()
+		result = append(result, &kinesis.PutRecordsRequestEntry{
+			Data:         data,
+			PartitionKey: &event.PartitionKey,
+		})
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	out, err := ks.PutRecords(&kinesis.PutRecordsInput{
+		Records:    result,
+		StreamName: &streamName,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if out.FailedRecordCount != nil && *out.FailedRecordCount > 0 {
+		return errors.New("One or more events published failed")
+	}
+
+	return nil
+}
+
 func init() {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -94,7 +132,6 @@ func init() {
 	}
 
 	ks = kinesis.New(sess)
-	log.Info().Int("num core", numCore).Msg("Init")
 }
 
 func main() {
