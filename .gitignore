@@ -15,5 +15,6 @@
 dev.env
 bin
 dynamokinesis/setting.yml
+firehosetransform/setting.yml
 .serverless
 
